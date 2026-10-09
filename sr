@@ -5,4 +5,4 @@ if [ ! -x "$DIR/.venv/bin/python" ]; then
   echo "Environment not installed. Run ./setup.sh first." >&2
   exit 1
 fi
-PYTHONPATH="$DIR" PYTHONUNBUFFERED=1 exec "$DIR/.venv/bin/python" -m slidereader.cli "$@"
+PYTHONPATH="$DIR" PYTHONUNBUFFERED=1 exec "$DIR/.venv/bin/python" -m slidereader "$@"

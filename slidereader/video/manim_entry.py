@@ -2,9 +2,9 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from slidereader.engine import LessonScene as _LessonScene  # noqa: E402
+from slidereader.video.scene import LessonScene as _LessonScene  # noqa: E402
 
 
 class LessonScene(_LessonScene):

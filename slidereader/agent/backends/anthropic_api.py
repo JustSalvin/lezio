@@ -11,9 +11,6 @@ from .base import Backend, Task, TaskOutcome
 class AnthropicAPI(Backend):
     name = "anthropic-api"
 
-    def __init__(self, model=""):
-        self.model = model
-
     def check(self):
         raise SystemExit("The anthropic-api backend is planned but not implemented yet. "
                          "Set [agent] backend = \"claude-subscription\" in config.toml.")

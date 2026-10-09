@@ -4,10 +4,11 @@ import inspect
 import re
 from types import SimpleNamespace
 
-from . import templates
-from .pdf_extract import load_lines, resolve_highlight, resolve_image
-from . import tts_engines
-from .script_io import DEPTHS, VISUAL_MODES, normalize_step, parse_slide_list, tts_options
+from .pdf import load_lines, resolve_highlight, resolve_image
+from .script import normalize_step, parse_pages
+from .settings import DEPTHS, VISUAL_MODES, tts_options
+from .video import templates
+from .voice import engines
 
 BEAT_KEYS = {"say", "highlight", "image", "zoom", "pause"}
 ANIM_KEYS = {"anim", "steps", "args"}
@@ -60,15 +61,15 @@ def validate(lesson, settings, slides, coverage=True):
 
     visual = settings["visual"]
     if visual not in VISUAL_MODES:
-        errors.append(f"settings.visual must be one of {VISUAL_MODES}")
+        errors.append(f"settings.visual must be one of {tuple(VISUAL_MODES)}")
     if settings["depth"] not in DEPTHS:
         errors.append(f"settings.depth must be one of {sorted(DEPTHS)}")
     if not isinstance(settings.get("instructions", ""), str):
         errors.append("settings.instructions must be a text")
     try:
-        tts = tts_options(settings)
+        tts = tts_options()
         errors += [f"settings.tts: {p}" for p in
-                   tts_engines.get_engine(tts["engine"]).validate({k: v for k, v in tts.items() if k != "engine"})]
+                   engines.get_engine(tts["engine"]).validate({k: v for k, v in tts.items() if k != "engine"})]
     except SystemExit as e:
         errors.append(f"settings.tts: {e}")
 
@@ -122,7 +123,7 @@ def validate(lesson, settings, slides, coverage=True):
     if seen != sorted(seen):
         warnings.append("slides are not in ascending order (the video follows the script order)")
     if coverage:
-        in_scope = parse_slide_list(settings["pages"], range(1, pages + 1))
+        in_scope = parse_pages(settings["pages"], range(1, pages + 1))
         missing = sorted(set(in_scope) - set(seen) - set(settings["skip"]))
         if missing:
             warnings.append(f"pages neither narrated nor in settings.skip: {missing}")

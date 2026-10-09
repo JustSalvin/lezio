@@ -1,6 +1,6 @@
 """Manim scene that renders ONE slide of a lesson (chosen through environment variables).
 
-Do not call directly: use `./sr render` / `./sr anim`, which set
+Started by video/render.py through the manim command, which sets
 SR_LESSON, SR_SLIDE and optionally SR_ONLY_BEAT (render a single animation beat) and
 SR_FAKE_AUDIO (seconds per piece when audio has not been generated yet).
 """
@@ -11,11 +11,11 @@ import numpy as np
 from manim import (ORIGIN, Create, FadeIn, FadeOut, ImageMobject, Rectangle, ReplacementTransform,
                    RoundedRectangle, Scene, config, linear)
 
+from ..lesson import Lesson
+from ..pdf import load_lines, resolve_highlight, resolve_image
+from ..script import load_script, normalize_step, piece_key
+from ..validate import find_animation, load_custom_animations
 from .anim_api import BACKGROUND, YELLOW, Steps
-from .config import Lesson
-from .pdf_extract import load_lines, resolve_highlight, resolve_image
-from .script_io import load_script, normalize_step, piece_key
-from .validate import find_animation, load_custom_animations
 
 config.background_color = BACKGROUND
 

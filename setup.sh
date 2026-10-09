@@ -43,7 +43,7 @@ say "Speech environment (.venv-tts)"
 .venv-tts/bin/pip install -q -r requirements-tts.txt
 
 say "Speech model of the configured TTS engine (downloaded once, e.g. into ~/.cache/huggingface)"
-PYTHONPATH="$PWD" .venv-tts/bin/python -m slidereader.tts download
+PYTHONPATH="$PWD" .venv-tts/bin/python -m slidereader.voice.synthesize download
 
 mkdir -p input output lessons
 say "Done. Put a PDF in input/ and run ./sr"

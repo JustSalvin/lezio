@@ -1,13 +1,13 @@
-# slide-reader configuration: your stable preferences.
+# slide-reader configuration.
 #
-# Precedence (lowest -> highest):
-#   built-in defaults < this file < settings saved in each lesson (scripts/<lesson>.json) < command-line options
-# Per-video choices (pages, visual mode, depth) are asked by the wizard or given as options; the values
-# below are only their defaults.
+# Only stable configuration lives here. Choices made for each video (pages, visual mode, depth,
+# instructions for the agent) are given to the program - wizard or command-line options - and saved
+# in the lesson.
 
 [tts]
-# Text-to-speech engine. See every engine, its options and voices with:  ./sr tts
-#   voxtral = local on Apple Silicon (default)      edge = Microsoft voices, online, free
+# Text-to-speech engine. Engines, options and voices: ./sr tts   Try a voice: ./sr tts --try "..."
+#   voxtral = local on Apple Silicon      edge = Microsoft voices, online, free
+# Changing the voice also changes existing lessons the next time they are rebuilt.
 engine = "voxtral"
 
 [tts.voxtral]
@@ -21,46 +21,47 @@ rate = "+0%"
 pitch = "+0Hz"
 
 [narration]
-# Language of the narration and of the on-screen animation texts
+# Language of the narration and of the on-screen animation texts (should match the voice)
 language = "Italian"
-# Default visual mode:  slides | mixed | animated
-visual = "mixed"
-# Default depth:  1 extensive | 2 faithful | 3 condensed | 4 short
-depth = 2
 # Seconds of silence between two spoken pieces
 beat_gap = 0.35
 
 [agent]
-# The program calls an LLM for the tasks that need judgment (planning, writing, judging frames).
+# The LLM used for the tasks that need judgment (planning, writing, judging frames).
 # The model works only through tools defined by the program (no files, no shell).
 #   "claude-subscription" = Claude via the Claude Agent SDK, using your Claude Code login (subscription)
 #   "anthropic-api"       = Anthropic API key (planned, not implemented yet)
 backend = "claude-subscription"
-# Model for the agent ("" = Claude Code default)
-model = ""
-# Instructions given to the agent in every lesson (a lesson can add its own with --instructions).
-# Example: "Skip interactive slides such as live polls or quizzes. Do not read URLs aloud."
-instructions = ""
-# Slides written per agent task (smaller = more focused tasks, more calls)
-group_size = 4
-# Rounds of "render animations -> agent judges the frames -> fix" per group of slides
-animation_rounds = 2
-# Seconds per narration step when animations are previewed before the audio exists
-placeholder_seconds = 5
-# After the final render the agent judges the frames of the re-rendered slides and fixes real defects
-review = true
-# Slides per review task
-review_group_size = 5
+# Model: an alias (opus, sonnet, haiku) or a full id (e.g. claude-opus-5-5, claude-sonnet-5-5)
+model = "opus"
+# Reasoning effort: low | medium | high | xhigh | max
+effort = "high"
+
+# Optional per-task overrides (plan = classify the slides, write = the narration, review = final check).
+# [agent.review]
+# model = "sonnet"
+# effort = "medium"
 
 [video]
 width = 1920
 height = 1080
 fps = 30
+
+# ---------------------------------------------------------------------------------------------
+# Tuning: you normally do not need to change these.
+
+[tuning]
+# Slides written per agent task (smaller = more focused tasks, more calls)
+group_size = 4
+# How many times the agent may preview its animations while writing a group of slides
+animation_rounds = 2
+# Seconds per narration step when animations are previewed before the voice exists
+placeholder_seconds = 5
+# Slides per final-review task
+review_group_size = 5
 # Slides rendered in parallel
 parallel_jobs = 4
-# Pixel width of the slide images embedded in the video (higher = sharper slow zoom)
+# Pixel width of the slide images in the video (higher = sharper slow zoom)
 slide_image_width = 2700
-# Pixel width of the slide previews the agent looks at
+# Pixel width of the slide pictures shown to the agent
 preview_image_width = 1280
-# Height of the lightweight copy of the final video
-small_height = 720

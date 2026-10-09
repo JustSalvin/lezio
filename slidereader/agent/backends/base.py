@@ -2,7 +2,9 @@
 
 A Task is a system prompt, a user message and a set of Tools. Tools are plain Python functions owned by
 the program: the model can only act through them (it has no file system, shell or web access).
-A backend runs the conversation until the model stops or a tool marks the task as done.
+A backend runs the conversation until the model stops or a tool marks the task as done, and reports what
+happens through task.on_event(kind, data):
+    ("model", "<model id actually answering>"), ("tool", (name, input)), ("rejected", (name, first line))
 """
 import base64
 from dataclasses import dataclass, field
@@ -52,8 +54,11 @@ class Task:
     system: str
     prompt: str
     tools: list[Tool]
+    model: str = ""          # "" = the backend's default
+    effort: str = ""         # low | medium | high | xhigh | max ("" = default)
     max_turns: int = 40
     log_path: Path | None = None
+    on_event: Callable[[str, object], None] | None = None
 
 
 @dataclass
@@ -62,6 +67,7 @@ class TaskOutcome:
     turns: int = 0
     text: str = ""           # last text the model wrote
     error: str = ""
+    model: str = ""          # model that actually answered
     extra: dict = field(default_factory=dict)
 
 

@@ -1,4 +1,4 @@
-"""PDF analysis: slide images, highlightable text lines, images and an overview for the agent."""
+"""PDF analysis: slide images, highlightable text lines (L-numbers), images; highlight resolution."""
 import json
 import re
 import unicodedata
@@ -8,8 +8,8 @@ import pymupdf
 
 from .config import CONFIG
 
-SLIDE_IMAGE_WIDTH = CONFIG["video"]["slide_image_width"]
-PREVIEW_IMAGE_WIDTH = CONFIG["video"]["preview_image_width"]
+SLIDE_IMAGE_WIDTH = CONFIG["tuning"]["slide_image_width"]
+PREVIEW_IMAGE_WIDTH = CONFIG["tuning"]["preview_image_width"]
 
 INTERACTIVE_WORDS = ("mentimeter", "kahoot", "wooclap", "slido", "socrative", "menti.com", "poll")
 
