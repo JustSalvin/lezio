@@ -1,6 +1,6 @@
 """The agent tasks: what the model receives and the tools through which it works.
 
-    plan     the material in scope -> title, outline, ordered segments (sources, goal, length, style)
+    plan     the material in scope -> title, outline, ordered segments (sources, goal, length, visual idea)
     write    one or a few segments -> narration + scene code, each submission checked and previewed
     review   final frames of rendered segments -> fixes
 
@@ -18,8 +18,9 @@ import time
 from ..config import CONFIG
 from ..material import RefError
 from ..script import find_segment, normalize_piece, save_script
-from ..settings import DEPTHS, SEGMENT_STYLES, segment_style
-from ..validate import check_narration, check_scene_code
+from ..config import THEMES
+from ..settings import DEPTHS, house_theme, lesson_theme
+from ..validate import check_narration, check_scene_code, scene_code_warnings
 from . import prompts
 from .backends import Image, Task, Tool, ToolResult, task_options
 
@@ -28,14 +29,10 @@ MAX_VIEW = 6
 
 
 # ======================================================================== shared pieces
-def settings_block(work, style=None):
+def settings_block(work):
     s = work.script["settings"]
-    style = style or s["style"]
     block = (f"Lesson: {work.lesson.id}\nNarration language: {s['language']}\n"
-             f"Style: {style} - {prompts.style_rule(style)}\n"
              f"Depth: {s['depth']} ({DEPTHS[s['depth']]}) - {prompts.depth_rule(s['depth'])}")
-    if s["style"] == "auto" and style != "auto":
-        block += "\n(The lesson style is auto: this style was chosen for this segment in the plan.)"
     if s.get("instructions"):
         block += "\n\nINSTRUCTIONS FROM THE USER (priority over the default rules):\n" + \
                  "\n".join(f"- {line}" for line in s["instructions"].splitlines() if line.strip())
@@ -123,12 +120,15 @@ def scene_api():
     for name in ("mark", "point"):
         fn = getattr(material.Page, name)
         out.append(f"  page.{name}{_signature(fn, 1)}{_doc(fn)}")
-    out.append("\nStyle:")
-    out.append("  colors: BLUE, BLUE_LIGHT, ORANGE, ORANGE_LIGHT, GREEN, GREEN_LIGHT, YELLOW, YELLOW_LIGHT, RED, "
-               "RED_LIGHT, DARK, GREY, GREY_LIGHT; chalk: CHALK, CHALK_YELLOW, CHALK_BLUE, CHALK_PINK, CHALK_GREEN")
-    out.append("  fonts: FONT (sans), MONO, HAND (handwriting)   frame: FRAME_WIDTH, FRAME_HEIGHT, SAFE_LEFT, "
-               "SAFE_RIGHT, SAFE_BOTTOM, SAFE_TOP")
-    for name in ("theme", "ink", "T", "MT", "wrap", "fit", "box", "arrow", "person", "check", "cross"):
+    out.append("\nHouse style - the names below come from the lesson's theme; use them, never fixed colors:")
+    out.append("  colors: BACKGROUND, TEXT (body text), MUTED (secondary text, labels), PRIMARY + PRIMARY_SOFT (titles, "
+               "main elements; soft = fills), SECONDARY + SECONDARY_SOFT (a second contrasting family), HIGHLIGHT + "
+               "HIGHLIGHT_SOFT (what is being talked about now), POSITIVE + POSITIVE_SOFT (correct, yes), NEGATIVE + "
+               "NEGATIVE_SOFT (wrong, no), NEUTRAL_SOFT (neutral fills)")
+    out.append("  fonts: FONT (text), TITLE_FONT, MONO (code, digits in columns), HAND (handwriting: board-like "
+               "writing, annotations)   sizes: TITLE_SIZE, TEXT_SIZE, SMALL_SIZE")
+    out.append("  frame: FRAME_WIDTH, FRAME_HEIGHT, SAFE_LEFT, SAFE_RIGHT, SAFE_BOTTOM, SAFE_TOP")
+    for name in ("T", "MT", "heading", "wrap", "fit", "box", "arrow", "person", "check", "cross"):
         fn = getattr(style, name)
         out.append(f"  {name}{_signature(fn)}{_doc(fn)}")
     out.append("\nLayouts (optional) - " + (inspect.getdoc(layouts) or "").split("\n\n")[1].replace("\n", " "))
@@ -142,12 +142,9 @@ def plan_task(work):
     s = work.script["settings"]
     focus = s.get("focus") or {}
     scope = work.material.scope(focus)
-    auto = s["style"] == "auto"
-    style_field = (', "style": one of ' + " | ".join(SEGMENT_STYLES)) if auto else ""
-    system = prompts.compose("role", "plan", style_field=style_field)
+    themes = sorted(p.stem for p in THEMES.glob("*.toml"))
+    system = prompts.compose("role", "plan", "rules/teaching", house=house_theme(), themes=", ".join(themes))
     prompt = settings_block(work)
-    if auto:
-        prompt += "\n\nThe styles to choose from:\n" + "\n".join(f"- {prompts.style_rule(x)}" for x in SEGMENT_STYLES)
     units, described = work.material.size(focus)
     lo, hi = prompts.target_minutes(s["depth"], units)
     prompt += (f"\n\nTARGET LENGTH of the whole lesson: about {lo:.1f}-{hi:.1f} minutes ({described} in scope, "
@@ -157,11 +154,14 @@ def plan_task(work):
     def submit(args):
         problems = []
         title, outline = str(args.get("title", "")).strip(), str(args.get("outline", "")).strip()
+        visual_language = str(args.get("visual_language", "")).strip()
         segments, skipped = args.get("segments"), args.get("skipped") or []
         if not title:
             problems.append("title is empty")
         if not outline:
             problems.append("outline is empty")
+        if not visual_language:
+            problems.append("visual_language is empty")
         if not isinstance(segments, list) or not segments:
             return rejected(problems + ["segments must be a non-empty list"])
         covered, out = set(), []
@@ -192,10 +192,6 @@ def plan_task(work):
                 covered.update(items)
             entry = {"title": str(seg.get("title", "")).strip(), "goal": str(seg.get("goal", "")).strip(),
                      "sources": refs, "minutes": minutes, "visual": str(seg.get("visual", "")).strip()}
-            if auto:
-                if seg.get("style") not in SEGMENT_STYLES:
-                    problems.append(f"{where}: \"style\" must be one of {', '.join(SEGMENT_STYLES)}")
-                entry["style"] = seg.get("style")
             out.append(entry)
         skipped_items, skipped_out = set(), []
         for x in skipped:
@@ -205,6 +201,9 @@ def plan_task(work):
                 skipped_out.append({"ref": ref, "reason": str(x.get("reason", "")) if isinstance(x, dict) else ""})
             except RefError as e:
                 problems.append(f"skipped: {e}")
+        theme = str(args.get("theme") or "").strip()
+        if theme and theme not in themes:
+            problems.append(f"theme must be one of {', '.join(themes)} (or omitted)")
         missing = [r for r in scope if r not in covered and r not in skipped_items]
         if missing:
             problems.append("not covered by any segment and not in skipped: " + ", ".join(missing[:30]))
@@ -215,7 +214,8 @@ def plan_task(work):
             return rejected(problems, "Plan rejected:")
         for k, entry in enumerate(out, 1):
             entry["id"] = f"s{k:02d}"
-        work.script.update(title=title, outline=outline, plan_key=work.plan_key, skipped=skipped_out,
+        work.script.update(title=title, outline=outline, plan_key=work.plan_key, skipped=skipped_out, theme=theme,
+                           visual_language=visual_language,
                            segments=[{"id": e.pop("id"), **e} for e in out])
         save_script(work.lesson.script, work.script)
         return ToolResult([f"Plan accepted ({len(out)} segments). The task is complete."], done=True)
@@ -223,8 +223,10 @@ def plan_task(work):
     tools = material_tools(work) + [
         Tool("submit_plan", "Submit the lesson plan (checked by the program).",
              {"type": "object", "properties": {"title": {"type": "string"}, "outline": {"type": "string"},
-                                               "segments": ARRAY_OF_OBJECTS, "skipped": ARRAY_OF_OBJECTS},
-              "required": ["title", "outline", "segments"]}, submit)]
+                                               "visual_language": {"type": "string"},
+                                               "segments": ARRAY_OF_OBJECTS, "skipped": ARRAY_OF_OBJECTS,
+                                               "theme": {"type": "string"}},
+              "required": ["title", "outline", "visual_language", "segments"]}, submit)]
     return make_task(work, "plan", "plan", system, prompt, tools, max_turns=60)
 
 
@@ -236,11 +238,17 @@ def numbered(narration):
     return "\n".join(rows)
 
 
+def theme_line(script):
+    import tomllib
+    name = lesson_theme(script)
+    data = tomllib.loads((THEMES / f"{name}.toml").read_text())
+    return f"{name} - {data.get('description', '')}"
+
+
 def segment_brief(work, seg, with_text=True):
-    s = work.script["settings"]
     lines = [f"### Segment {seg['id']}: {seg['title']}",
              f"Goal: {seg.get('goal', '')}",
-             f"Length: about {seg.get('minutes', '?')} minutes · style: {segment_style(s, seg)}",
+             f"Length: about {seg.get('minutes', '?')} minutes",
              f"Visual idea from the plan: {seg.get('visual', '')}",
              f"Sources: {', '.join(seg.get('sources', []))}"]
     if with_text:
@@ -270,6 +278,7 @@ class SegmentSubmissions:
         if self.renders[sid] >= self.rounds:
             return ToolResult([f"No submissions left for {sid}: {next_hint}"], error=True)
         errors, warnings = check_narration(narration)
+        warnings += scene_code_warnings(code) if isinstance(code, str) else []
         if not isinstance(code, str) or not code.strip():
             errors.append("code is empty")
         else:
@@ -338,15 +347,15 @@ def write_task(work, ids, note=""):
     segs = [find_segment(script, sid) for sid in ids]
     order = [x["id"] for x in script["segments"]]
     first, last = order.index(ids[0]), order.index(ids[-1])
-    styles = sorted({segment_style(s, seg) for seg in segs})
-    system = prompts.compose("role", "write", "rules/writing", "rules/narration_format", "rules/scene_api",
-                             api=scene_api())
-    prompt = settings_block(work, styles[0] if len(styles) == 1 else None)
-    if len(styles) > 1:
-        prompt += "\nStyles of these segments:\n" + "\n".join(f"- {prompts.style_rule(x)}" for x in styles)
+    system = prompts.compose("role", "write", "rules/teaching", "rules/writing", "rules/narration_format",
+                             "rules/scene_api", api=scene_api())
+    prompt = settings_block(work) + f"\nTheme of the lesson: {theme_line(script)}"
     plan = "\n".join(f"  {x['id']}  {x['title']}" + ("   <- write now" if x["id"] in ids else "")
-                     + (f"  [{segment_style(s, x)}]" if s["style"] == "auto" else "") for x in script["segments"])
-    prompt += f"\n\nLESSON: {script['title']}\n{script['outline']}\nSegments:\n{plan}\n"
+                     for x in script["segments"])
+    prompt += f"\n\nLESSON: {script['title']}\n{script['outline']}\n"
+    if script.get("visual_language"):
+        prompt += f"Visual language of the lesson (follow it): {script['visual_language']}\n"
+    prompt += f"Segments:\n{plan}\n"
     if first == 0:
         prompt += "\nThe first segment to write opens the lesson: welcome the viewer and say what the lesson is about."
     else:
@@ -397,14 +406,16 @@ def write_task(work, ids, note=""):
 def review_task(work, ids):
     script = work.script
     segs = [find_segment(script, sid) for sid in ids]
-    system = prompts.compose("role", "review", "rules/writing", "rules/narration_format", "rules/scene_api",
-                             api=scene_api())
+    system = prompts.compose("role", "review", "rules/teaching", "rules/writing", "rules/narration_format",
+                             "rules/scene_api", api=scene_api())
     blocks = []
     for seg in segs:
         code = work.lesson.scene_file(seg["id"]).read_text()
         blocks.append(segment_brief(work, seg, with_text=False) + f"\nNarration:\n{numbered(seg['narration'])}"
                       f"\nScene code:\n```python\n{code}\n```")
-    prompt = settings_block(work) + f"\n\nLESSON: {script['title']}\n\nReview the segments {', '.join(ids)}.\n\n" + \
+    prompt = settings_block(work) + f"\nTheme of the lesson: {theme_line(script)}" + \
+        f"\n\nLESSON: {script['title']}\nVisual language: {script.get('visual_language') or '-'}" + \
+        f"\n\nReview the segments {', '.join(ids)}.\n\n" + \
         "\n\n".join(blocks)
     subs = SegmentSubmissions(work, ids, CONFIG["tuning"]["preview_rounds"])
     changed = []

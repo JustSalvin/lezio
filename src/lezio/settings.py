@@ -1,23 +1,16 @@
 """The two kinds of settings, never mixed.
 
-- Per-video choices (style, depth, instructions for the agent, focus on parts of the sources):
-  given to the program (wizard or command-line options) and saved in lessons/<id>/script.json.
+- Per-video choices (depth, instructions for the agent, focus on parts of the sources): everything else
+  the user wants for a video goes in the instructions. They are given to the program (wizard or
+  command-line options) and saved in lessons/<id>/script.json.
   The sources themselves are listed in lessons/<id>/lesson.json.
 - Configuration (voices, language, LLM, video quality, tuning): config.toml only.
 
 Pure Python (no heavy imports): used by both virtual environments.
 """
-from .config import CONFIG
+from .config import CONFIG, THEMES
 from .voice import engines
 
-STYLES = {
-    "animated": "full animations: diagrams, transformations, motion; no slide look",
-    "slides": "clean generated slides revealed step by step with the voice",
-    "whiteboard": "a board where everything is written and drawn by hand while talking",
-    "auto": "the agent chooses animated, slides or whiteboard for each segment, switching along the video",
-}
-# Styles a segment can have: with "auto" the plan chooses one of these for every segment
-SEGMENT_STYLES = ("animated", "slides", "whiteboard")
 DEPTHS = {1: "extensive", 2: "faithful", 3: "condensed", 4: "short"}
 DEPTH_HELP = {
     1: "everything in the material, plus explanations, examples and connections",
@@ -25,17 +18,22 @@ DEPTH_HELP = {
     3: "the main points, lightly summarized",
     4: "very concise, short-video style",
 }
-LESSON_CHOICES = ("style", "depth", "instructions", "focus")
-DEFAULT_CHOICES = {"style": "auto", "depth": 2, "instructions": "", "focus": {}}
+LESSON_CHOICES = ("depth", "instructions", "focus")
+DEFAULT_CHOICES = {"depth": 2, "instructions": "", "focus": {}}
 # Changing these makes the current plan and script obsolete (the lesson is rewritten, with a backup)
-PLAN_CHOICES = ("style", "depth", "focus")
+PLAN_CHOICES = ("depth", "focus")
 
 
-def segment_style(settings, segment):
-    """The style of one segment: the lesson style, or with "auto" the one chosen in the plan."""
-    if settings["style"] != "auto":
-        return settings["style"]
-    return segment.get("style") if segment.get("style") in SEGMENT_STYLES else "slides"
+def house_theme():
+    """The theme of config.toml [video] theme (light if missing)."""
+    name = CONFIG.get("video", {}).get("theme", "light")
+    return name if (THEMES / f"{name}.toml").exists() else "light"
+
+
+def lesson_theme(script):
+    """The theme a lesson is rendered with: the one chosen in its plan, else the house theme."""
+    name = script.get("theme")
+    return name if name and (THEMES / f"{name}.toml").exists() else house_theme()
 
 
 def default_settings():
@@ -49,7 +47,7 @@ def merge_settings(saved):
 
 
 def settings_to_save(settings):
-    out = {k: settings[k] for k in ("style", "depth")}
+    out = {"depth": settings["depth"]}
     if settings.get("focus"):
         out["focus"] = settings["focus"]
     if settings.get("instructions"):

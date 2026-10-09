@@ -1,0 +1,31 @@
+# lezio theme. See light.toml for how themes work.
+
+name = "Paper"
+description = "warm cream page, serif fonts, teal and brick accents: a classic textbook look"
+
+[colors]
+background = "#FAF6EC"
+text = "#2B2620"
+muted = "#7A7064"
+primary = "#1F6F78"
+primary_soft = "#DCEDEA"
+secondary = "#A8431E"
+secondary_soft = "#F3E1D6"
+highlight = "#D9A400"
+highlight_soft = "#F7EDC9"
+positive = "#3F7D3A"
+positive_soft = "#E2EEDC"
+negative = "#A82E2E"
+negative_soft = "#F2DCD8"
+neutral_soft = "#EFE8DA"
+
+[fonts]
+text = "Baskerville"   # serif with working <sup>/<sub> (Charter and Palatino draw them badly)
+title = "Baskerville"
+mono = "Menlo"
+hand = "Noteworthy"
+
+[sizes]
+title = 50
+text = 34
+small = 26

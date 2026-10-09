@@ -1,0 +1,31 @@
+# lezio theme. See light.toml for how themes work.
+
+name = "Chalkboard"
+description = "green school board, chalk colors, handwriting everywhere"
+
+[colors]
+background = "#2A3B33"
+text = "#F4F1E8"
+muted = "#B9C2B8"
+primary = "#9CC8FF"
+primary_soft = "#34495A"
+secondary = "#FFB38A"
+secondary_soft = "#4A3E36"
+highlight = "#FFE07A"
+highlight_soft = "#4A4A33"
+positive = "#A8E6A1"
+positive_soft = "#33503A"
+negative = "#FF9FB2"
+negative_soft = "#55363D"
+neutral_soft = "#34473E"
+
+[fonts]
+text = "Chalkboard SE"
+title = "Chalkboard SE"
+mono = "Menlo"
+hand = "Chalkboard SE"
+
+[sizes]
+title = 50
+text = 36
+small = 28

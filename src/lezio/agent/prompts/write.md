@@ -2,7 +2,8 @@ TASK: write the narration and the scene of the segments given in the message.
 For each segment:
 1. Look at its sources: their text is in the message (read gives more); look at pages and figures with
    view before deciding what to show.
-2. Write its narration and scene code and call submit_segment. The program checks them and renders a
+2. Decide how to teach it (the teaching guidelines, the plan's visual idea and the visual language of
+   the lesson), write its narration and scene code and call submit_segment. The program checks them and renders a
    low-resolution preview with estimated timing: you get, for every narration piece, the frame in its
    middle and the frame at its end, with automatic warnings (texts cut off or overlapping, animations
    longer than the speech).

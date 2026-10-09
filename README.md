@@ -1,8 +1,10 @@
 # lezio
 
 Turn **study material** — slide decks, notes, documents, pictures — into a **narrated video lesson**.
-A synthetic voice explains the material like a teacher, while scenes written for the lesson (generated
-slides, animations, a whiteboard) change in sync with the voice.
+A synthetic voice explains the material like a teacher, while scenes written for the lesson (diagrams
+that build up, animations, worked examples written step by step, clean slides, original figures) change
+in sync with the voice. How to show each part is decided by the agent, following **teaching guidelines**
+drawn from research on learning from video ([docs/teaching-guidelines.md](docs/teaching-guidelines.md)).
 
 lezio is a **program**. It runs the whole process — reading the material, validation, speech synthesis,
 rendering, editing — and calls an LLM only for the tasks that need judgment: planning the lesson, writing
@@ -44,7 +46,8 @@ for the program and video, `.venv-tts` for speech) and downloads the speech mode
 ./lezio                                        # wizard: arrow-key menus for files or lesson and options
 ./lezio input/slides.pdf                       # asks only what is missing
 ./lezio input/slides.pdf input/appunti.md input/schema.png   # several files, of any kind
-./lezio input/slides.pdf --focus "slides.pdf:21-40" --style slides --depth 2 --yes   # no questions
+./lezio input/slides.pdf --focus "slides.pdf:21-40" --depth 2 --yes   # no questions
+./lezio input/slides.pdf --instructions "Mostra le slide originali ed evidenzia la riga di cui parli"
 ./lezio my-lesson                              # continue / update an existing lesson
 ```
 
@@ -52,22 +55,21 @@ for the program and video, `.venv-tts` for speech) and downloads the speech mode
 `.jpg`, `.webp`) — one or more files of any kind in the same lesson. Files outside `input/` are copied
 there.
 
-Before starting, a summary shows material, style, voice, agent model, instructions and the state of the
+Before starting, a summary shows material, depth, theme, voice, agent model, instructions and the state of the
 lesson; after planning, the list of segments is shown for confirmation. Each step runs with a live
 progress line. Choices are saved in the lesson, so `./lezio <lesson>` later writes only what is missing and
 rebuilds only what changed; it is resumable if interrupted.
 
 On an existing lesson the wizard offers: update the video, change the study material (add/remove files,
-page ranges), change style or depth (the lesson is planned and written again, the old one is backed up),
+page ranges), change the depth (the lesson is planned and written again, the old one is backed up),
 change the instructions, rewrite from scratch.
 
 ### Options (per-video choices, saved in the lesson)
 
 | Option | Meaning |
 |---|---|
-| `--style STYLE` | `animated` · `slides` · `whiteboard` · `auto` (default) |
 | `--depth N` | `1` extensive · `2` faithful (default) · `3` condensed · `4` short |
-| `--instructions "..."` | instructions for the agent, e.g. `"Base the lesson only on the input slides, shown as they are."` |
+| `--instructions "..."` | anything else you want from this lesson, e.g. `"Show the original slides"`, `"A board drawn by hand"`, `"Use the dark theme"`, `"Skip the live polls"` |
 | `--focus "FILE:PAGES"` | only some pages of a PDF, e.g. `--focus "slides.pdf:1-20"` (repeatable) |
 | `--id NAME` | lesson name (default: from the first file); with files, adds them to that lesson |
 | `--rewrite` | plan and write the lesson again from scratch (the old one is backed up) |
@@ -82,22 +84,26 @@ change the instructions, rewrite from scratch.
 ./lezio redo <lesson> --segments s03,s05 --part voice     # new voice takes   (--part video: re-render)
 ./lezio build <lesson>                                    # after editing the lesson by hand
 ./lezio config                                            # change the configuration with menus
+./lezio themes                                            # visual themes;  --preview NAME to see one
 ./lezio tts                                               # TTS engines, options and voices
 ./lezio tts --try "Ciao a tutti." --voice it_male --play
 ./lezio help tools                                        # low-level commands
 ```
 
-## Styles and depth
+## How a lesson looks
 
-| Style | Result |
-|---|---|
-| `animated` | full animations: diagrams that build up, transformations, motion; no slide look |
-| `slides` | clean generated slides revealed step by step with the voice (not copies of the input pages) |
-| `whiteboard` | a board where everything is written and drawn by hand while the teacher talks |
-| `auto` | the agent chooses animated, slides or whiteboard for each segment, switching along the video |
+There are no fixed "styles": for every segment the agent chooses how to teach it — a diagram that builds
+up, an animation of a process, a worked example written step by step, a comparison, a clean slide, an
+original figure — following the teaching guidelines in [docs/teaching-guidelines.md](docs/teaching-guidelines.md)
+(the agent's version is `src/lezio/agent/prompts/rules/teaching.md`). Anything specific you want goes in
+the instructions; they take priority over the guidelines.
 
-Using the original pages is not implied by any style: ask for it in the instructions (e.g. *"Show the
-original slides and highlight the line being discussed"*).
+The **visual style** (colors, fonts, sizes) is the house **theme**, a file in `themes/`: `light`
+(default), `dark`, `chalkboard`, `whiteboard`, `paper`, or your own — copy `themes/light.toml` to
+`themes/<name>.toml` and edit it. Choose the house theme in `config.toml` (`[video] theme`) or with
+`./lezio config`; preview one with `./lezio themes --preview <name>`. Scenes use the theme's color names,
+never fixed colors, so changing the theme re-renders existing lessons with the new look (no rewriting).
+A lesson can ask for a different theme in its instructions (e.g. "use the chalkboard theme").
 
 | Depth | Narration |
 |---|---|
@@ -116,7 +122,7 @@ Only stable configuration; per-video choices are never here. Edit it by hand or 
 | `[tts]`, `[tts.<engine>]` | speech engine (`voxtral` local, `edge` online) and its options: voice, expressiveness, model |
 | `[narration]` | language of narration and on-screen texts, pause between pieces |
 | `[agent]` | LLM backend, **model** (`opus`, `sonnet`, `haiku` or a full id) and **effort**; optional `[agent.plan]`, `[agent.write]`, `[agent.review]` overrides |
-| `[video]` | resolution and frame rate |
+| `[video]` | house **theme** (a file in `themes/`), resolution and frame rate |
 | `[tuning]` | segments per agent task, previews per segment, render timeout, parallel renders, image sizes |
 
 The summary shows the configured model; the final panel shows the model that actually answered.
@@ -128,7 +134,9 @@ A lesson is an ordered list of **segments**. A segment has a narration (a list o
 file each) and a **scene**: Python code written by the agent for that segment (`lessons/<id>/scenes/`),
 rendered with Manim in sync with the narration. Scene code uses a small helper library (`lezio.scene`:
 voice sync, house style and themes, access to pages and figures of the material, optional layouts) and
-is checked before it runs (only safe imports, no files, a time limit).
+is checked before it runs (only safe imports, no files, a time limit). The plan gives every segment a
+goal, its sources, a length (from the depth and the amount of material) and its main visual idea, and
+fixes a visual language for the whole lesson (the same concept always gets the same color and symbol).
 
 ## Folders
 
@@ -141,6 +149,7 @@ lessons/<lesson>/
     scenes/                scene code of each segment (editable by hand)
     build/                 cache: material, audio, renders, step sheets, agent log (deletable)
 archive/slide-reader/      lessons of slide-reader, the previous version of the program (not used)
+themes/                    visual themes (house style presets; add your own)
 config.toml                configuration
 src/lezio/                 the program (see AGENTS.md)
 ```
@@ -149,7 +158,8 @@ src/lezio/                 the program (see AGENTS.md)
 
 - The log of every LLM task (prompts, tool calls, results) is in `lessons/<lesson>/build/agent/log.jsonl`;
   the frames the agent looked at are in `lessons/<lesson>/build/qa/`.
-- `AGENTS.md` is the developer guide; `docs/history.md` tells how lezio came out of slide-reader.
+- `AGENTS.md` is the developer guide; `docs/history.md` tells how lezio came out of slide-reader;
+  `docs/teaching-guidelines.md` is the research behind the teaching guidelines.
 - The Voxtral weights are licensed CC BY-NC 4.0 (non-commercial). Make sure you may reuse the material.
 
 ## Roadmap

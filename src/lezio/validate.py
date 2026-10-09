@@ -7,7 +7,7 @@ import ast
 import re
 
 from .script import normalize_piece
-from .settings import DEPTHS, SEGMENT_STYLES, STYLES
+from .settings import DEPTHS
 
 MAX_WORDS = 70
 PIECE_KEYS = {"say", "pause"}
@@ -82,6 +82,17 @@ def check_scene_code(code):
     return problems
 
 
+HEX_COLOR = re.compile(r"""["']#[0-9a-fA-F]{6}["']""")
+
+
+def scene_code_warnings(code):
+    """Advice on scene code that works but does not follow the house style."""
+    if HEX_COLOR.search(code):
+        return ["the code uses fixed colors (#rrggbb): use the theme colors (PRIMARY, HIGHLIGHT, ...) so that the "
+                "lesson follows the house style"]
+    return []
+
+
 # ------------------------------------------------------------------ narration
 def check_narration(narration):
     """Narration rules. Returns (errors, warnings)."""
@@ -118,8 +129,6 @@ def check_narration(narration):
 # ------------------------------------------------------------------ the whole script
 def check_settings(settings):
     errors = []
-    if settings["style"] not in STYLES:
-        errors.append(f"settings.style must be one of {', '.join(STYLES)}")
     if settings["depth"] not in DEPTHS:
         errors.append(f"settings.depth must be one of {sorted(DEPTHS)}")
     if not isinstance(settings.get("instructions", ""), str):
@@ -136,6 +145,10 @@ def check_script(lesson, script, material=None):
     material = material or Material(lesson)
     errors = check_settings(script["settings"])
     warnings = []
+    if script.get("theme"):
+        from .config import THEMES
+        if not (THEMES / f"{script['theme']}.toml").exists():
+            errors.append(f"theme '{script['theme']}' does not exist in themes/")
     seen = set()
     for seg in script["segments"]:
         sid = seg.get("id")
@@ -150,8 +163,6 @@ def check_script(lesson, script, material=None):
                 material.resolve(ref)
             except RefError as e:
                 errors.append(f"{sid}: sources: {e}")
-        if script["settings"]["style"] == "auto" and seg.get("style") not in SEGMENT_STYLES:
-            warnings.append(f"{sid}: no style chosen (style auto): {', '.join(SEGMENT_STYLES)} - slides is used")
         if not seg.get("narration"):
             warnings.append(f"{sid}: not written yet")
             continue

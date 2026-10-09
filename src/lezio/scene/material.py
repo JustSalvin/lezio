@@ -10,7 +10,8 @@ import numpy as np
 from manim import ImageMobject, RoundedRectangle
 
 from ..material import Material, line_box
-from .style import FRAME_HEIGHT, FRAME_WIDTH, YELLOW
+from . import style
+from .style import FRAME_HEIGHT, FRAME_WIDTH
 
 
 def _size(mob, width, height):
@@ -49,13 +50,15 @@ class Page(ImageMobject):
         a, b = self.point(x0, y0), self.point(x1, y1)
         return (a + b) / 2, b[0] - a[0], a[1] - b[1]
 
-    def mark(self, lines, color=YELLOW, pad=0.07, fill_opacity=0.16, stroke_width=5):
+    def mark(self, lines, color=None, pad=0.07, fill_opacity=0.16, stroke_width=5):
         """A highlight frame around text lines of this page, placed where the page is now.
 
+        Color: HIGHLIGHT unless given.
         lines: 3 | [3, 5] (L-numbers, a range) | {"lines": [2, 4, 6]} (exactly these) | "phrase in a line"
                | ["start phrase", "end phrase"]. L-numbers are those shown by the read tool.
         """
         center, w, h = self.region(lines)
+        color = color or style.HIGHLIGHT
         r = RoundedRectangle(width=w + 2 * pad, height=h + 2 * pad, corner_radius=0.08, stroke_color=color,
                              stroke_width=stroke_width, fill_color=color, fill_opacity=fill_opacity)
         return r.move_to(center)

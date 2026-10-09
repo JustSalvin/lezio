@@ -44,6 +44,9 @@ effort = "high"
 # effort = "medium"
 
 [video]
+# House visual style: a theme file in themes/ (light, dark, chalkboard, whiteboard, paper, or your own).
+# Preview: ./lezio themes --preview <name>. A lesson can ask for another one in its instructions.
+theme = "light"
 width = 1920
 height = 1080
 fps = 30

@@ -5,7 +5,7 @@ import questionary
 from questionary import Choice, Separator, Style
 
 from ..material import parse_range
-from ..settings import DEPTH_HELP, DEPTHS, STYLES
+from ..settings import DEPTH_HELP, DEPTHS
 
 STYLE = Style([("qmark", "fg:#00b8d4 bold"), ("question", "bold"), ("pointer", "fg:#00b8d4 bold"),
                ("highlighted", "fg:#00b8d4 bold"), ("answer", "fg:#2e9e44 bold"), ("selected", "fg:#2e9e44"),
@@ -53,7 +53,7 @@ def existing_action(summary):
         Choice("Update the video", "update", description="write what is missing, rebuild what changed"),
         Choice("Change the study material", "sources", description="add or remove files, change page ranges "
                "(the lesson is planned again; the current one is backed up)"),
-        Choice("Change style or depth", "style", description="rewrites the lesson (backed up)"),
+        Choice("Change the depth", "depth", description="rewrites the lesson (backed up)"),
         Choice("Change the instructions for the agent", "instructions"),
         Choice("Rewrite the lesson from scratch", "rewrite"),
     ]))
@@ -69,11 +69,6 @@ def focus(name, n_items, unit, default=""):
                                 validate=ok, style=STYLE)).strip()
 
 
-def style(default):
-    return ask(questionary.select("Style", default=default, style=STYLE, choices=[
-        Choice(name, name, description=desc) for name, desc in STYLES.items()]))
-
-
 def depth(default):
     return ask(questionary.select("Depth", default=default, style=STYLE, choices=[
         Choice(f"{n} · {DEPTHS[n]}", n, description=DEPTH_HELP[n]) for n in DEPTHS]))
@@ -81,7 +76,8 @@ def depth(default):
 
 def instructions(default=""):
     return ask(questionary.text("Instructions for the agent (optional)", default=default, style=STYLE,
-                                instruction="e.g. Skip interactive slides such as live polls or quizzes.")).strip()
+                                instruction="anything you want: e.g. \"Show the original slides\", \"A board "
+                                            "drawn by hand\", \"Skip the live polls\", \"Use the dark theme\".")).strip()
 
 
 def confirm(message, default=True):

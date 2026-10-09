@@ -16,10 +16,6 @@ def compose(*parts, **values):
     return "\n\n".join(text(p, **values) for p in parts)
 
 
-def style_rule(style):
-    return text(f"styles/{style}")
-
-
 def depth_rule(depth):
     d = DEPTH[str(depth)]
     return f"{d['rule']} Length: about {d['minutes']}."

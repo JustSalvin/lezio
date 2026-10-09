@@ -1,14 +1,14 @@
-"""The program: from study material (or an existing lesson) to a finished video. One workflow for every style.
+"""The program: from study material (or an existing lesson) to a finished video.
 
     1. material   new or changed sources -> build/material (pages, text, figures)     program
-    2. plan       title, outline, segments (sources, goal, length, style)                agent task (plan)
+    2. plan       title, outline, segments (sources, goal, length, visual idea)          agent task (plan)
     3. write      narration + scene code of a few segments at a time, with previews     agent tasks (write)
     4. voice      speech synthesis with the configured TTS engine                        program
     5. video      render the segments that changed                                        program
     6. review     final frames judged, broken segments fixed                             agent task (review)
     7. join       output/<lesson>.mp4                                                     program
 
-Per-video choices (style, depth, instructions, focus) come from the wizard or the options and are saved in
+Per-video choices (depth, instructions, focus) come from the wizard or the options and are saved in
 the lesson; configuration comes from config.toml. Every step is resumable: segments already written,
 audio already generated and videos already rendered are kept.
 """
@@ -27,7 +27,7 @@ from ..agent.backends import get_backend, task_options
 from ..config import CONFIG, INPUT, ROOT
 from ..lesson import Lesson, all_lessons, lesson_exists, slugify, stored_path
 from ..script import empty_script, find_segment, is_written, load_script, save_script
-from ..settings import DEPTHS, PLAN_CHOICES, merge_settings, segment_style, tts_label, tts_options
+from ..settings import DEPTHS, PLAN_CHOICES, lesson_theme, merge_settings, tts_label, tts_options
 from ..validate import check_script
 from ..video import render
 from ..voice import client as voice
@@ -90,7 +90,7 @@ class Run:
         for lid in all_lessons():
             s = load_script(Lesson(lid).script)
             names = ", ".join(Path(x).name for x in Lesson(lid).source_names)
-            lessons.append((lid, f"{names} · {s['settings']['style']} · depth {s['settings']['depth']} · "
+            lessons.append((lid, f"{names} · depth {s['settings']['depth']} · "
                                  f"{len(s['segments'])} segments"))
         files = input_files()
         if not lessons and not files:
@@ -120,21 +120,20 @@ class Run:
             saved = load_script(self.lesson.script)
         self.saved = saved
         base = saved["settings"]
-        flags = {k: v for k, v in (("style", getattr(a, "style", None)), ("depth", getattr(a, "depth", None)),
+        flags = {k: v for k, v in (("depth", getattr(a, "depth", None)),
                                    ("instructions", getattr(a, "instructions", None))) if v is not None}
         if getattr(a, "focus", None):
             flags["focus"] = self.parse_focus(a.focus, base.get("focus", {}))
         self.rewrite = bool(getattr(a, "rewrite", False))
 
         written = [s for s in saved["segments"] if s.get("narration")]
-        if self.interactive and (self.is_new or not saved["segments"]) and not set(flags) >= {"style", "depth"}:
+        if self.interactive and (self.is_new or not saved["segments"]) and "depth" not in flags:
             self.ask_focus(flags, base)
-            flags.setdefault("style", wizard.style(base["style"]))
             flags.setdefault("depth", wizard.depth(base["depth"]))
             flags.setdefault("instructions", wizard.instructions(base["instructions"]))
         elif self.interactive and not flags and not self.rewrite and not new_sources:
             action = wizard.existing_action(
-                f"{self.lesson_id} · {base['style']} · depth {base['depth']} · "
+                f"{self.lesson_id} · depth {base['depth']} · "
                 f"{len(written)}/{len(saved['segments'])} segments written")
             if action == "sources":
                 files = input_files()
@@ -142,8 +141,7 @@ class Run:
                 extra = [(p, rel(p)) for p in current if p not in [f for f, _ in files]]
                 self.sources = wizard.sources(extra + files, checked=current)
                 self.ask_focus(flags, base)
-            elif action == "style":
-                flags["style"] = wizard.style(base["style"])
+            elif action == "depth":
                 flags["depth"] = wizard.depth(base["depth"])
             elif action == "instructions":
                 flags["instructions"] = wizard.instructions(base["instructions"])
@@ -217,7 +215,9 @@ class Run:
         minutes = sum(x.get("minutes", 0) for x in segs) if segs and not self.replan else None
         rows = [("lesson", f"[bold]{self.lesson_id}[/]"),
                 ("material", "\n".join(sources)),
-                ("style", f"{s['style']} · depth {s['depth']} ({DEPTHS[s['depth']]})"),
+                ("depth", f"{s['depth']} ({DEPTHS[s['depth']]})"),
+                ("theme", lesson_theme(self.saved) + ("  [muted](chosen for this lesson)[/]" if self.saved.get("theme")
+                                                     and not self.replan else "")),
                 ("voice", voice_line),
                 ("agent", f"{CONFIG['agent']['backend']} · model {opts['model'] or 'default'}"
                           + (f" · effort {opts['effort']}" if opts["effort"] else "")),
@@ -267,7 +267,7 @@ class Run:
         self.script["settings"] = self.settings
         self.plan_key = self.compute_plan_key()
         if self.script["segments"] and self.script.get("plan_key") != self.plan_key and not self.replan:
-            ui.info("The material changed since the lesson was planned: it is planned again.")
+            ui.info("The material or the choices changed since the lesson was planned: it is planned again.")
             self.replan = self.rewrite = True
         if self.rewrite and self.script["segments"]:
             dst = self.backup()
@@ -361,14 +361,12 @@ class Run:
         table = Table(box=None, padding=(0, 1), show_header=False)
         table.add_column(style="muted")
         table.add_column()
-        table.add_column(style="accent")
         table.add_column(style="muted", justify="right")
-        auto = self.settings["style"] == "auto"
         for x in self.script["segments"]:
             done = " [muted](written)[/]" if is_written(self.lesson, x) else ""
-            table.add_row(x["id"], ui.escape(x["title"]) + done, segment_style(self.settings, x) if auto else "",
-                          f"{x['minutes']:g} min")
-        ui.console.print(f"\n   [bold]{ui.escape(self.script['title'])}[/]")
+            table.add_row(x["id"], ui.escape(x["title"]) + done, f"{x['minutes']:g} min")
+        theme = f"  [muted]theme {self.script['theme']}[/]" if self.script.get("theme") else ""
+        ui.console.print(f"\n   [bold]{ui.escape(self.script['title'])}[/]{theme}")
         ui.console.print(table)
         for x in self.script["skipped"]:
             ui.console.print(f"   [muted]skipped {ui.escape(x['ref'])}: {ui.escape(x.get('reason', ''))}[/]")

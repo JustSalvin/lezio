@@ -2,7 +2,7 @@
 import argparse
 import sys
 
-from ..settings import DEPTHS, STYLES
+from ..settings import DEPTHS
 from . import commands, ui
 
 HELP = """[bold]lezio[/] [muted]· study material → narrated video lesson[/]
@@ -13,9 +13,9 @@ HELP = """[bold]lezio[/] [muted]· study material → narrated video lesson[/]
   Files: PDF, Markdown, text, Word (.docx), pictures (.png .jpg .webp) - one or more, of any kind.
 
 [bold]Options[/] [muted](per-video choices, saved in the lesson)[/]
-  --style STYLE           animated · slides · whiteboard · auto (the agent chooses per segment, default)
   --depth N               1 extensive · 2 faithful · 3 condensed · 4 short
-  --instructions "..."    instructions for the agent, e.g. "Base the lesson only on the input slides."
+  --instructions "..."    anything you want from the lesson, e.g. "Show the original slides and highlight
+                          the line being discussed", "A hand-drawn board", "Use the dark theme"
   --focus "FILE:PAGES"    use only some pages of a PDF, e.g. --focus "slides.pdf:1-20" (repeatable)
   --id NAME               lesson name (default: from the first file name); with files: add them to it
   --rewrite               plan and write the lesson again from scratch (the old one is backed up)
@@ -26,7 +26,8 @@ HELP = """[bold]lezio[/] [muted]· study material → narrated video lesson[/]
   ./lezio status <lesson>                          segments: what is done, missing or outdated
   ./lezio redo <lesson> --segments s03,s05 [--part script|voice|video] [--note "add an example"]
   ./lezio build <lesson>                           rebuild after editing the lesson by hand
-  ./lezio config                                   change the configuration (voice, agent, video, ...)
+  ./lezio config                                   change the configuration (voice, agent, video, theme...)
+  ./lezio themes [--preview NAME]                  visual themes (house style presets) and their preview
   ./lezio tts                                      voices and TTS options;  --try "text" to listen
   ./lezio help tools                               low-level commands
 
@@ -44,7 +45,6 @@ TOOLS_HELP = """[bold]Low-level commands[/] [muted](the program runs them for yo
 def main_parser():
     p = argparse.ArgumentParser(prog="./lezio", add_help=False)
     p.add_argument("targets", nargs="*")
-    p.add_argument("--style", choices=list(STYLES))
     p.add_argument("--depth", type=int, choices=sorted(DEPTHS))
     p.add_argument("--instructions")
     p.add_argument("--focus", action="append")
@@ -74,6 +74,7 @@ def sub_parser():
         (["--note"], {}), (["--no-review"], {"action": "store_true"}), (["-y", "--yes"], {"action": "store_true"}))
     add("build", commands.build, lesson)
     add("config", commands.config)
+    add("themes", commands.themes, (["--preview"], {}))
     add("tts", commands.tts, (["--engine"], {}), (["--try"], {"dest": "try_text"}), (["--voice"], {}),
         (["--set"], {"action": "append", "default": []}), (["--play"], {"action": "store_true"}))
     add("check", commands.check, lesson)
@@ -86,7 +87,7 @@ def sub_parser():
     return ap
 
 
-SUBCOMMANDS = {"status", "redo", "build", "config", "tts", "check", "ingest", "audio", "render", "join", "scene-api"}
+SUBCOMMANDS = {"status", "redo", "build", "config", "themes", "tts", "check", "ingest", "audio", "render", "join", "scene-api"}
 
 
 def main():

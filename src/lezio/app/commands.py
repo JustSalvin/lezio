@@ -10,7 +10,7 @@ from .. import material as mat
 from ..config import CONFIG, ROOT
 from ..lesson import Lesson, slugify
 from ..script import is_written, load_script, pieces
-from ..settings import DEPTHS, segment_style, tts_label, tts_options
+from ..settings import DEPTHS, house_theme, lesson_theme, tts_label, tts_options
 from ..validate import check_script
 from ..video import render
 from ..voice import client as voice
@@ -30,13 +30,14 @@ def status(a):
         ("lesson", f"[bold]{lesson.id}[/]  {ui.escape(script['title'])}"),
         ("material", "\n".join(ui.escape(p) + (f"  [muted](pages {focus[p]})[/]" if p in focus else "")
                                for p in lesson.source_names)),
-        ("style", f"{s['style']} · depth {s['depth']} ({DEPTHS[s['depth']]})"),
+        ("depth", f"{s['depth']} ({DEPTHS[s['depth']]})"),
+        ("theme", lesson_theme(script) + ("  [muted](chosen for this lesson)[/]" if script.get("theme") else "")),
         ("voice", ui.escape(tts_label())),
         ("instructions", ui.escape(s["instructions"]) or "[muted]none[/]"),
         ("video", rel(lesson.output) if lesson.output.exists() else "[muted]not assembled yet[/]"),
     ], title="status")
     table = Table(box=None, padding=(0, 1))
-    for col, width in (("segment", 7), ("title", None), ("style", 10), ("pieces", 6), ("voice", 6), ("video", 11)):
+    for col, width in (("segment", 7), ("title", None), ("pieces", 6), ("voice", 6), ("video", 11)):
         table.add_column(col, style="muted" if col in ("segment", "pieces") else None, no_wrap=True,
                          overflow="ellipsis", min_width=width, max_width=30 if width is None else None,
                          justify="right" if col in ("pieces", "voice") else "left")
@@ -54,7 +55,7 @@ def status(a):
                 state = "[warn]outdated[/]"
             else:
                 state = "[ok]up to date[/]"
-        table.add_row(seg["id"], ui.escape(seg["title"][:50]), segment_style(s, seg), str(len(keys) or ""),
+        table.add_row(seg["id"], ui.escape(seg["title"][:60]), str(len(keys) or ""),
                       voice_state, state)
     ui.console.print(table)
 
@@ -132,6 +133,43 @@ def tts(a):
         st.done(f"{rel(out)}  [muted]{result.get('duration')}s of audio[/]")
     if a.play:
         subprocess.run(["afplay", str(out)])
+
+
+def themes(a):
+    from ..config import THEMES
+    if a.preview:
+        subprocess.run(["open", str(preview_theme(a.preview))])
+        return
+    import tomllib
+    table = Table(box=None, padding=(0, 2), show_header=False)
+    for path in sorted(THEMES.glob("*.toml")):
+        data = tomllib.loads(path.read_text())
+        mark = "[ok]●[/]" if path.stem == house_theme() else " "
+        table.add_row(mark, f"[bold]{path.stem}[/]", ui.escape(data.get("description", "")))
+    ui.console.print(table)
+    ui.info(ui.escape(f"house theme: {house_theme()} (config.toml [video] theme, or ./lezio config)"))
+    ui.info("preview: ./lezio themes --preview NAME     your own: copy themes/light.toml to themes/NAME.toml")
+
+
+def preview_theme(name):
+    """Render a still image showing a theme: title, text, colors, boxes, a highlight, handwriting."""
+    from ..config import MANIM, PACKAGE, SUBPROCESS_ENV, THEMES
+    if not (THEMES / f"{name}.toml").exists():
+        ui.fail(f"unknown theme '{name}'", "./lezio themes")
+    media = ROOT / "voice-samples" / ".theme-preview"
+    with ui.step(f"Rendering a preview of {name}") as st:
+        env = {**SUBPROCESS_ENV, "LEZIO_THEME": name}
+        r = subprocess.run([str(MANIM), "render", "-qm", "-s", "--disable_caching", "--media_dir", str(media), "-o",
+                            f"theme_{name}", str(PACKAGE / "video" / "theme_preview.py"), "ThemePreview"],
+                           env=env, cwd=ROOT, capture_output=True, text=True)
+        if r.returncode != 0:
+            ui.fail("preview failed", ui.escape((r.stdout + r.stderr)[-400:]))
+        png = next(media.glob(f"images/**/theme_{name}*.png"))
+        out = ROOT / "output" / f"theme_{name}.png"
+        out.parent.mkdir(exist_ok=True)
+        png.replace(out)
+        st.done(rel(out))
+    return out
 
 
 def config(a):

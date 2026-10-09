@@ -11,8 +11,9 @@ import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ..config import CONFIG, FFMPEG, MANIM, OUTPUT, PACKAGE, SUBPROCESS_ENV as ENV
+from ..config import CONFIG, FFMPEG, MANIM, OUTPUT, PACKAGE, SUBPROCESS_ENV as ENV, THEMES
 from ..script import find_segment, load_script, pieces, scene_name
+from ..settings import lesson_theme
 
 PREVIEW_FPS = 15                   # manim -ql
 
@@ -92,11 +93,13 @@ def runtime_code():
 
 
 def fingerprint(lesson, script, segment):
-    """Hash of everything that affects a segment's video: entry, audio, scene code, runtime, material."""
+    """Hash of everything that affects a segment's video: entry, audio, scene code, theme, runtime, material."""
     s = script["settings"]
     h = hashlib.sha1(json.dumps(segment, sort_keys=True, ensure_ascii=False).encode())
     v = CONFIG["video"]
-    h.update(f"{s['style']}|{s['piece_gap']}|{v['width']}x{v['height']}@{v['fps']}".encode())
+    theme = THEMES / f"{lesson_theme(script)}.toml"
+    h.update(f"{s['piece_gap']}|{v['width']}x{v['height']}@{v['fps']}".encode())
+    h.update(theme.read_bytes() if theme.exists() else b"")
     meta = lesson.durations_meta()
     for key, _, _ in pieces(segment):
         h.update(f"{key}:{meta.get(key, {}).get('duration')}".encode())

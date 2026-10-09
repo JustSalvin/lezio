@@ -42,8 +42,12 @@ Changes decided by the user during the execution:
 
 - The second axis `format` (`lecture`/`dialogue`/`review`, with a teacher and a student voice) was
   dropped: a lesson is always a lecture with one voice.
-- Styles: `animated`, `slides`, `whiteboard`, and `auto` (first called `mixed`): the agent chooses one of
-  the other three for each segment and may switch along the video.
+- Styles were first `animated`, `slides`, `whiteboard` and `auto` (the agent choosing per segment), then
+  dropped altogether: the agent decides how to teach every segment following teaching guidelines drawn
+  from research (`docs/teaching-guidelines.md`), and everything specific the user wants goes in the
+  instructions. Only the depth remains a choice (plus which files and pages to use).
+- The house visual style became themes: files in `themes/` with presets (light, dark, chalkboard,
+  whiteboard, paper) that users can copy and edit; scenes use color roles, so a theme re-skins lessons.
 - `./lezio config`: every configuration setting can be changed through the arrow-key menus;
   `config.toml` stays the only place of the configuration (edited with tomlkit, comments kept).
 

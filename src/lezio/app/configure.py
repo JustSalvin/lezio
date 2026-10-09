@@ -189,13 +189,28 @@ def agent_menu(doc):
 
 
 def video_menu(doc):
+    import tomllib
+
+    from ..config import THEMES
     v = table(doc, "video")
     while True:
-        key = select("Video", [Choice(f"resolution   {v.get('width')}x{v.get('height')}", "resolution"),
+        key = select("Video", [Choice(f"theme        {v.get('theme', 'light')}", "theme",
+                                      description="the house visual style (themes/*.toml)"),
+                               Choice(f"resolution   {v.get('width')}x{v.get('height')}", "resolution"),
                                Choice(f"fps          {v.get('fps')}", "fps"), Choice("Back", BACK)])
         if key == BACK:
             return
-        if key == "resolution":
+        if key == "theme":
+            themes = {p.stem: tomllib.loads(p.read_text()).get("description", "") for p in sorted(THEMES.glob("*.toml"))}
+            while True:
+                name = select("Theme (your own: copy themes/light.toml to themes/<name>.toml)",
+                              [Choice(f"{n:12} {d}", n) for n, d in themes.items()], default=v.get("theme", "light"))
+                if select(f"Theme {name}", [Choice("Use it", "use"), Choice("See a preview first", "preview")]) == "use":
+                    v["theme"] = name
+                    break
+                from .commands import preview_theme
+                subprocess.run(["open", str(preview_theme(name))])
+        elif key == "resolution":
             w, h = select("Resolution", [Choice(f"{w}x{h}", (w, h)) for w, h in RESOLUTIONS],
                           default=(v.get("width"), v.get("height")) if (v.get("width"), v.get("height")) in RESOLUTIONS else None)
             v["width"], v["height"] = w, h
@@ -229,7 +244,8 @@ def configure():
             Choice(f"Narration     {d.get('narration', {}).get('language')}", "narration"),
             Choice(f"Agent         {agent.get('backend')} · {agent.get('model')} · effort {agent.get('effort')}",
                    "agent"),
-            Choice(f"Video         {video.get('width')}x{video.get('height')} · {video.get('fps')} fps", "video"),
+            Choice(f"Video         theme {video.get('theme', 'light')} · {video.get('width')}x{video.get('height')} · "
+                   f"{video.get('fps')} fps", "video"),
             Choice("Tuning", "tuning"),
             Separator(),
             Choice("Save and exit", "save"),

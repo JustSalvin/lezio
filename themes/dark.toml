@@ -1,0 +1,31 @@
+# lezio theme. See light.toml for how themes work.
+
+name = "Dark"
+description = "dark slate background, light text, cyan and amber accents"
+
+[colors]
+background = "#15181E"
+text = "#ECEFF4"
+muted = "#9AA3B2"
+primary = "#5CC8FF"
+primary_soft = "#1E3448"
+secondary = "#FFB454"
+secondary_soft = "#3D3020"
+highlight = "#FFE066"
+highlight_soft = "#3A3520"
+positive = "#7EE081"
+positive_soft = "#1F3A24"
+negative = "#FF7A7A"
+negative_soft = "#45232A"
+neutral_soft = "#252A33"
+
+[fonts]
+text = "Avenir Next"
+title = "Avenir Next"
+mono = "Menlo"
+hand = "Chalkboard SE"
+
+[sizes]
+title = 48
+text = 34
+small = 26

@@ -13,7 +13,7 @@ through tools the program defines.
 ```
 ./lezio ─ app/cli.py ─ app/run.py (Run) ─┬─ material/             ingest sources → build/material/index.json, refs
                                          ├─ agent/tasks.py        plan · write segments · review (tools)
-                                         │    agent/prompts/      role, tasks, rules, styles, depth.toml
+                                         │    agent/prompts/      role, tasks, rules (teaching...), depth.toml
                                          │    agent/backends/     LLM backends (Claude subscription; API planned)
                                          ├─ validate.py           narration rules, scene code checks, script
                                          ├─ voice/client.py ─ voice/synthesize.py (in .venv-tts) ─ voice/engines/
@@ -22,21 +22,24 @@ through tools the program defines.
 ```
 
 Flow of `./lezio <files|lesson>`: resolve the per-video choices (wizard/options, saved choices) → summary
-→ ingest new/changed sources → plan task (when there is no plan for the current sources/focus/style/depth)
+→ ingest new/changed sources → plan task (when there is no plan for the current sources/focus/depth)
 → write tasks (`tuning.segments_per_task` segments each; every submission is checked and previewed) →
 voice → render outdated segments → review task on the re-rendered segments → re-render fixed → join.
-Every step is resumable. One workflow for every style: a style is only a prompt (`prompts/styles/`).
+Every step is resumable. There are no styles: the agent decides how to teach each segment following the
+teaching guidelines (`prompts/rules/teaching.md`, research in `docs/teaching-guidelines.md`); the user's
+instructions override them. The look (colors, fonts, sizes) is the theme (`themes/*.toml`).
 
 ## Layout
 
 ```
 lezio                      bash wrapper: python -m lezio in .venv (PYTHONPATH=src)
 setup.sh                   installation (Homebrew libs, two venvs, TTS model download)
-config.toml                configuration (TTS, language, LLM, video, tuning) - also ./lezio config
+config.toml                configuration (TTS, language, LLM, video + theme, tuning) - also ./lezio config
+themes/                    visual themes: colors, fonts, sizes (house style presets; users add their own)
 src/lezio/
   config.py                paths, CONFIG, environment for subprocesses
   lesson.py                Lesson (all paths of lessons/<id>/), slugify, listing
-  settings.py              per-video choices (style, depth, instructions, focus) vs configuration; TTS options
+  settings.py              per-video choices (depth, instructions, focus) vs configuration; TTS options; theme
   script.py                script.json v2: load/save, narration pieces, audio keys
   validate.py              narration rules, scene code checks (AST allowlist), whole-script check
   material/                ingestion: pdf.py (pages, L-numbered text lines, figures, chrome removal),
@@ -45,7 +48,8 @@ src/lezio/
                            configure.py (./lezio config, tomlkit)
   agent/
     tasks.py               the three tasks, their tools, the scene API reference given to the model
-    prompts/               role.md, plan.md, write.md, review.md, rules/*.md, styles/*.md, depth.toml
+    prompts/               role.md, plan.md, write.md, review.md, rules/*.md (teaching, writing, narration
+                           format, scene API), depth.toml (rules and target lengths)
     prompts.py             loads and composes prompt texts ($placeholders)
     backends/              base.py (Task, Tool, ToolResult, Image), claude_subscription.py, anthropic_api.py
   voice/
@@ -56,8 +60,9 @@ src/lezio/
     scene_runner.py        Manim scene: one segment → runs scenes/<id>.py:build(scene, steps, material)
     manim_entry.py         file given to the manim CLI
     render.py              previews, final renders, step sheets, fingerprints, final join
+    theme_preview.py       still image of a theme (./lezio themes --preview)
   scene/                   PUBLIC helper library of scene code (`from lezio.scene import *`):
-                           sync.py (Steps/Timer), style.py (colors, fonts, themes, T, box...),
+                           sync.py (Steps/Timer), style.py (theme colors/fonts/sizes, T, heading, box...),
                            material.py (material.page/figure, page.mark), layouts.py (optional layouts)
 lessons/<id>/              lesson.json, script.json, scenes/*.py, build/ (cache, gitignored)
 archive/slide-reader/      old slide-reader lessons (not loaded)
@@ -69,19 +74,30 @@ input/  output/            material in, videos out (both gitignored)
 - **Refs** address the material: `slides.pdf#p3` (page), `slides.pdf#p3-5`, `slides.pdf#p3.f1` (figure),
   `notes.md#s2` (section), `diagram.png` (picture source). Source ids are slugs of the file names.
 - **Segments**: a lesson is an ordered list of segments (`s01`, `s02`, ...): plan data (title, goal,
-  sources, minutes, visual idea, `style` when the lesson style is `auto`), narration pieces (one audio file
+  sources, minutes, visual idea), narration pieces (one audio file
   each, key `<segment>_<piece>`), and a scene file `scenes/<id>.py` defining `build(scene, steps, material)`.
 - **Scene contract**: `build` calls `steps()` once per narration piece; the Timer it returns holds the
   speech time of that piece (`t.play`, `t.wait`, `t.until`). The runner checks the code first, then
   reports per piece: start/end times, texts cut off or overlapping, animations longer than the speech.
 - **Step sheets** (`build/qa/preview_<id>.png`, `final_<id>.png`): for every piece, the frame in its
-  middle and at its end. They are what the agent looks at when writing and reviewing.
+  middle and at its end. They are what the agent looks at when writing and reviewing (`view_frame` shows
+  one frame at full size).
+- **Themes**: `themes/<name>.toml` (colors by role, fonts, sizes). The runner applies the lesson's theme
+  (script.json `theme`, chosen by the plan only when the instructions ask; else config.toml `[video]
+  theme`) before the scene code runs (`style.apply_theme` rebinds the names in every `lezio.scene`
+  module). Scene code uses role names (PRIMARY, HIGHLIGHT, ...), so a new theme re-skins existing lessons;
+  the theme file is part of the fingerprint.
+- **Visual language**: the plan states how key concepts look across the lesson (theme color roles,
+  symbols, recurring diagrams); every write and review task receives it, so separately written segments
+  read as one lesson.
+- **Target length**: the program computes it from the depth (`depth.toml` seconds per unit) and the amount
+  of material in scope (pages, pictures, 150-word blocks) and gives it to the plan.
 
 ## Conventions
 
 - Code, files, docs: English. Narration and on-screen texts: the lesson language (Italian by default);
   never hard-code them in the program.
-- Two kinds of settings, never mixed: per-video choices (style, depth, instructions, focus) come from the
+- Two kinds of settings, never mixed: per-video choices (depth, instructions, focus) come from the
   wizard/CLI and are saved in `lessons/<id>/script.json` (`settings.LESSON_CHOICES`); the sources are in
   `lesson.json`; configuration (TTS, language, LLM, video, `[tuning]`) lives only in `config.toml` and has
   no CLI flags (`./lezio config` edits the file).
@@ -107,8 +123,11 @@ input/  output/            material in, videos out (both gitignored)
 with `ref`, text, `image`/`preview` paths, `figures`); register the extensions in `material.KINDS` and the
 reader in `material._reader`; bump `material.VERSION` when readers change (sources are read again).
 
-**Style** — `agent/prompts/styles/<name>.md`, add it to `settings.STYLES` (and `SEGMENT_STYLES` if `auto`
-may choose it); a default theme can be mapped in `video/scene_runner.STYLE_THEME`.
+**Theme** — a new `themes/<name>.toml` (copy `light.toml`); new color roles need a name in
+`scene/style.COLOR_NAMES`, the list in `agent.tasks.scene_api()` and an entry in every preset.
+
+**Teaching guidelines** — `agent/prompts/rules/teaching.md` (given to plan, write and review tasks); keep
+`docs/teaching-guidelines.md` (sources) in sync.
 
 **Scene helper** — a function in `lezio/scene/*.py` exported by `scene/__init__.py`, with a docstring
 written for the model, and listed in `agent.tasks.scene_api()`. Layouts: `@layout` functions

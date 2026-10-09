@@ -10,6 +10,7 @@ INPUT = ROOT / "input"
 OUTPUT = ROOT / "output"
 LESSONS = ROOT / "lessons"
 CONFIG_FILE = ROOT / "config.toml"
+THEMES = ROOT / "themes"                         # visual themes (house style presets)
 
 VIDEO_PY = ROOT / ".venv" / "bin" / "python"      # Manim, PyMuPDF, Claude Agent SDK, the program
 VOICE_PY = ROOT / ".venv-tts" / "bin" / "python"  # MLX and the TTS engines

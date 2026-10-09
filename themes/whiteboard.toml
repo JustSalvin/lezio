@@ -1,0 +1,31 @@
+# lezio theme. See light.toml for how themes work.
+
+name = "Whiteboard"
+description = "white board, marker colors, handwriting everywhere"
+
+[colors]
+background = "#FBFBF8"
+text = "#1F2A36"
+muted = "#6E7781"
+primary = "#1D4ED8"
+primary_soft = "#E4EBFB"
+secondary = "#C2410C"
+secondary_soft = "#FBE8DD"
+highlight = "#EAB308"
+highlight_soft = "#FDF6D8"
+positive = "#15803D"
+positive_soft = "#E1F3E7"
+negative = "#B91C1C"
+negative_soft = "#F9E0E0"
+neutral_soft = "#EFEFEA"
+
+[fonts]
+text = "Chalkboard SE"
+title = "Chalkboard SE"
+mono = "Menlo"
+hand = "Chalkboard SE"
+
+[sizes]
+title = 50
+text = 36
+small = 28
