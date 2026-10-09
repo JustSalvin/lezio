@@ -42,9 +42,8 @@ say "Speech environment (.venv-tts)"
 .venv-tts/bin/pip install -q --upgrade pip
 .venv-tts/bin/pip install -q -r requirements-tts.txt
 
-MODEL=$(.venv/bin/python -c 'import tomllib; print(tomllib.load(open("config.toml","rb"))["tts"]["model"])')
-say "Speech model $MODEL (downloaded once into ~/.cache/huggingface)"
-.venv-tts/bin/python -c "from huggingface_hub import snapshot_download; snapshot_download('$MODEL')"
+say "Speech model of the configured TTS engine (downloaded once, e.g. into ~/.cache/huggingface)"
+PYTHONPATH="$PWD" .venv-tts/bin/python -m slidereader.tts download
 
-mkdir -p input scripts animations output
-say "Done. Put a PDF in input/ and ask your agent to read AGENTS.md."
+mkdir -p input output lessons
+say "Done. Put a PDF in input/ and run ./sr"

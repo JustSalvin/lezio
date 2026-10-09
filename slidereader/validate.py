@@ -6,21 +6,19 @@ from types import SimpleNamespace
 
 from . import templates
 from .pdf_extract import load_lines, resolve_highlight, resolve_image
-from .script_io import DEPTHS, VISUAL_MODES, normalize_step, parse_slide_list
+from . import tts_engines
+from .script_io import DEPTHS, VISUAL_MODES, normalize_step, parse_slide_list, tts_options
 
 BEAT_KEYS = {"say", "highlight", "image", "zoom", "pause"}
 ANIM_KEYS = {"anim", "steps", "args"}
 
 
 def animation_files(lesson):
-    files = [lesson.animations] if lesson.animations.exists() else []
-    if lesson.animations_dir.is_dir():
-        files += sorted(lesson.animations_dir.glob("*.py"))
-    return files
+    return sorted(lesson.animations_dir.glob("*.py")) if lesson.animations_dir.is_dir() else []
 
 
 def load_custom_animations(lesson):
-    """All public functions of animations/<id>.py and animations/<id>/*.py, as one namespace."""
+    """All public functions of lessons/<id>/animations/*.py, as one namespace."""
     found = {}
     for path in animation_files(lesson):
         spec = importlib.util.spec_from_file_location(f"custom_{lesson.id.replace('-', '_')}_{path.stem}", path)
@@ -65,6 +63,14 @@ def validate(lesson, settings, slides, coverage=True):
         errors.append(f"settings.visual must be one of {VISUAL_MODES}")
     if settings["depth"] not in DEPTHS:
         errors.append(f"settings.depth must be one of {sorted(DEPTHS)}")
+    if not isinstance(settings.get("instructions", ""), str):
+        errors.append("settings.instructions must be a text")
+    try:
+        tts = tts_options(settings)
+        errors += [f"settings.tts: {p}" for p in
+                   tts_engines.get_engine(tts["engine"]).validate({k: v for k, v in tts.items() if k != "engine"})]
+    except SystemExit as e:
+        errors.append(f"settings.tts: {e}")
 
     seen = []
     for s in slides:

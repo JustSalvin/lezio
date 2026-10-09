@@ -1,6 +1,6 @@
 .venv/
 .venv-tts/
-build/
+lessons/*/build/
 output/
 input/*.pdf
 __pycache__/

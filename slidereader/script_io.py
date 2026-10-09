@@ -1,30 +1,41 @@
-"""Loading and flattening a lesson script (scripts/<lesson>.json).
+"""Loading and flattening a lesson script (scripts/<lesson>.json), and the lesson settings.
 
 Pure Python (no Manim / MLX imports) so that both virtual environments can use it.
 """
 import json
 from pathlib import Path
 
+from . import tts_engines
 from .config import CONFIG
-
-VISUAL_KEYS = ("highlight", "image", "zoom")
-
-
-def default_settings():
-    return {
-        "language": CONFIG["narration"]["language"],
-        "visual": CONFIG["narration"]["visual"],
-        "depth": CONFIG["narration"]["depth"],
-        "pages": "",
-        "voice": CONFIG["tts"]["voice"],
-        "temperature": CONFIG["tts"]["temperature"],
-        "beat_gap": CONFIG["narration"]["beat_gap"],
-        "skip": [],
-    }
-
 
 VISUAL_MODES = ("slides", "mixed", "animated")
 DEPTHS = {1: "extensive", 2: "faithful", 3: "condensed", 4: "short"}
+SAVED_KEYS = ("visual", "depth", "pages", "skip", "instructions", "tts", "beat_gap")
+
+
+def default_settings():
+    """Settings of a lesson before anything is saved in it (config.toml values)."""
+    n = CONFIG["narration"]
+    return {"language": n["language"], "visual": n["visual"], "depth": n["depth"], "beat_gap": n["beat_gap"],
+            "pages": "", "skip": [], "instructions": "", "tts": {}}
+
+
+def merge_settings(saved):
+    s = {**default_settings(), **saved}
+    if "voice" in saved and "tts" not in saved:          # scripts written before engines existed
+        s["tts"] = {k: saved[k] for k in ("voice", "temperature") if k in saved}
+    return s
+
+
+def tts_options(settings):
+    """Complete TTS configuration of a lesson: {"engine": ..., option: value, ...}."""
+    return tts_engines.resolve(CONFIG["tts"], settings.get("tts"))
+
+
+def agent_instructions(settings):
+    """Global instructions (config.toml) followed by the lesson's own."""
+    return "\n".join(t.strip() for t in (CONFIG["agent"].get("instructions", ""), settings.get("instructions", ""))
+                     if t and t.strip())
 
 
 def load_script(path: Path):
@@ -37,7 +48,17 @@ def load_script(path: Path):
         raise SystemExit(f"{path.name}: invalid JSON at line {e.lineno}, column {e.colno}: {e.msg}")
     if "slides" not in data:
         raise SystemExit(f"{path.name}: missing \"slides\" list")
-    return {**default_settings(), **data.get("settings", {})}, data["slides"]
+    return merge_settings(data.get("settings", {})), data["slides"]
+
+
+def settings_to_save(settings):
+    """Only what belongs to the lesson (no copies of config defaults, except the per-video choices)."""
+    d = default_settings()
+    out = {k: settings[k] for k in ("visual", "depth", "pages", "skip")}
+    for k in ("instructions", "tts", "beat_gap"):
+        if settings.get(k) not in (None, d[k]):
+            out[k] = settings[k]
+    return out
 
 
 def normalize_step(step):
@@ -69,7 +90,7 @@ def parse_slide_list(spec, available):
     if not spec:
         return list(available)
     wanted = set()
-    for part in spec.split(","):
+    for part in str(spec).split(","):
         part = part.strip()
         if "-" in part:
             a, b = part.split("-")

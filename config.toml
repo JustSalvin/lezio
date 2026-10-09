@@ -1,31 +1,56 @@
-# slide-reader global configuration.
-# A lesson script (scripts/<lesson>.json) can override voice, temperature, beat_gap and skip
-# in its "settings" object.
+# slide-reader configuration: your stable preferences.
+#
+# Precedence (lowest -> highest):
+#   built-in defaults < this file < settings saved in each lesson (scripts/<lesson>.json) < command-line options
+# Per-video choices (pages, visual mode, depth) are asked by the wizard or given as options; the values
+# below are only their defaults.
 
 [tts]
-# Text-to-speech model (runs locally with MLX on Apple Silicon)
+# Text-to-speech engine. See every engine, its options and voices with:  ./sr tts
+#   voxtral = local on Apple Silicon (default)      edge = Microsoft voices, online, free
+engine = "voxtral"
+
+[tts.voxtral]
 model = "mlx-community/Voxtral-4B-TTS-2603-mlx-6bit"
-# Voxtral voice presets: it_male, it_female, fr_male, fr_female, es_male, es_female, de_male,
-# de_female, pt_male, pt_female, nl_male, nl_female, hi_male, hi_female, ar_male,
-# casual_male, casual_female, cheerful_female, neutral_male, neutral_female (English)
 voice = "it_male"
-# Lower = steadier and flatter, higher = more expressive (and more variable)
 temperature = 0.8
 
+[tts.edge]
+voice = "it-IT-DiegoNeural"
+rate = "+0%"
+pitch = "+0Hz"
+
 [narration]
-# Language of the spoken narration and of the on-screen animation texts
+# Language of the narration and of the on-screen animation texts
 language = "Italian"
-# Visual mode:  "slides"   = original slides with synced highlights only
-#               "mixed"    = slides + full-screen explanation animations (default)
-#               "animated" = animations only; slides are the source but are never shown
+# Default visual mode:  slides | mixed | animated
 visual = "mixed"
-# Script depth: 1 = extensive (reads everything and goes deeper, examples, analogies)
-#               2 = faithful  (everything on the slide, nothing added, nothing cut)
-#               3 = condensed (main points, a little summarized)
-#               4 = short     (very concise, short-video style)
+# Default depth:  1 extensive | 2 faithful | 3 condensed | 4 short
 depth = 1
-# Seconds of silence between two spoken beats
+# Seconds of silence between two spoken pieces
 beat_gap = 0.35
+
+[agent]
+# The program calls an LLM for the tasks that need judgment (planning, writing, judging frames).
+# The model works only through tools defined by the program (no files, no shell).
+#   "claude-subscription" = Claude via the Claude Agent SDK, using your Claude Code login (subscription)
+#   "anthropic-api"       = Anthropic API key (planned, not implemented yet)
+backend = "claude-subscription"
+# Model for the agent ("" = Claude Code default)
+model = ""
+# Instructions given to the agent in every lesson (a lesson can add its own with --instructions).
+# Example: "Skip Mentimeter slides. Never read e-mail addresses aloud."
+instructions = ""
+# Slides written per agent task (smaller = more focused tasks, more calls)
+group_size = 4
+# Rounds of "render animations -> agent judges the frames -> fix" per group of slides
+animation_rounds = 2
+# Seconds per narration step when animations are previewed before the audio exists
+placeholder_seconds = 5
+# After the final render the agent judges the frames of the re-rendered slides and fixes real defects
+review = true
+# Slides per review task
+review_group_size = 5
 
 [video]
 width = 1920
@@ -37,23 +62,5 @@ parallel_jobs = 4
 slide_image_width = 2700
 # Pixel width of the slide previews the agent looks at
 preview_image_width = 1280
-# Height of the optional lightweight copy of the final video (./sr join --small)
+# Height of the lightweight copy of the final video
 small_height = 720
-
-[agent]
-# The program calls an agent for the tasks that need judgment (planning, writing, judging frames).
-#   "claude-code"   = Claude Code CLI in headless mode, using your Claude login (subscription)
-#   "anthropic-api" = Anthropic API key (planned, not implemented yet)
-backend = "claude-code"
-# Model for the agent ("" = Claude Code default)
-model = ""
-# Slides written per agent task (smaller = more focused tasks, more calls)
-group_size = 4
-# Rounds of "render animations -> agent judges the frames -> fix" per group
-animation_rounds = 2
-# Seconds per narration step when animations are previewed before the audio exists
-placeholder_seconds = 5
-# After the final render, the agent judges the frames and fixes real defects
-review = true
-# Slides per review task
-review_group_size = 5

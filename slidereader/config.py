@@ -1,14 +1,21 @@
-"""Project paths and configuration (config.toml)."""
+"""Project paths and configuration (config.toml).
+
+Layout:
+    input/                      PDFs to turn into videos
+    output/                     finished videos
+    lessons/<id>/lesson.json    which PDF the lesson comes from
+    lessons/<id>/script.json    the narration script (the lesson's real work)
+    lessons/<id>/animations/    custom animations written for the lesson
+    lessons/<id>/build/         regenerable cache: slide images, plan, audio, renders, contact sheets
+"""
 import json
 import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 INPUT = ROOT / "input"
-SCRIPTS = ROOT / "scripts"
-ANIMATIONS = ROOT / "animations"
 OUTPUT = ROOT / "output"
-BUILD = ROOT / "build"
+LESSONS = ROOT / "lessons"
 
 VIDEO_PY = ROOT / ".venv" / "bin" / "python"
 TTS_PY = ROOT / ".venv-tts" / "bin" / "python"
@@ -18,21 +25,22 @@ MANIM = ROOT / ".venv" / "bin" / "manim"
 CONFIG = tomllib.loads((ROOT / "config.toml").read_text())
 
 
+def lesson_exists(lesson_id):
+    return (LESSONS / lesson_id / "lesson.json").exists()
+
+
 class Lesson:
     """Every path belonging to one lesson. The lesson id is derived from the PDF file name."""
 
     def __init__(self, lesson_id: str):
         self.id = lesson_id
-        self.build = BUILD / lesson_id
-        meta = self.build / "meta.json"
-        if not meta.exists():
-            raise SystemExit(f"Unknown lesson '{lesson_id}'. Run: ./sr init input/<file>.pdf")
-        self.pdf = ROOT / json.loads(meta.read_text())["pdf"]
-        self.script = SCRIPTS / f"{lesson_id}.json"
-        self.animations = ANIMATIONS / f"{lesson_id}.py"
-        self.animations_dir = ANIMATIONS / lesson_id
-        self.output = OUTPUT / f"{lesson_id}.mp4"
-        self.output_small = OUTPUT / f"{lesson_id}_{CONFIG['video']['small_height']}p.mp4"
+        self.dir = LESSONS / lesson_id
+        if not lesson_exists(lesson_id):
+            raise SystemExit(f"Unknown lesson '{lesson_id}'. Start it with: ./sr input/<file>.pdf")
+        self.pdf = ROOT / json.loads((self.dir / "lesson.json").read_text())["pdf"]
+        self.script = self.dir / "script.json"
+        self.animations_dir = self.dir / "animations"
+        self.build = self.dir / "build"
         self.slides = self.build / "slides"
         self.preview = self.build / "preview"
         self.lines = self.build / "lines.json"
@@ -43,12 +51,14 @@ class Lesson:
         self.video = self.build / "video"
         self.qa = self.build / "qa"
         self.agent = self.build / "agent"
+        self.output = OUTPUT / f"{lesson_id}.mp4"
+        self.output_small = OUTPUT / f"{lesson_id}_{CONFIG['video']['small_height']}p.mp4"
 
     @staticmethod
     def create(lesson_id: str, pdf: Path):
-        d = BUILD / lesson_id
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "meta.json").write_text(json.dumps({"pdf": str(pdf.resolve().relative_to(ROOT))}))
+        d = LESSONS / lesson_id
+        (d / "animations").mkdir(parents=True, exist_ok=True)
+        (d / "lesson.json").write_text(json.dumps({"pdf": str(pdf.resolve().relative_to(ROOT))}, indent=2) + "\n")
         return Lesson(lesson_id)
 
     def slide_image(self, n: int) -> Path:
