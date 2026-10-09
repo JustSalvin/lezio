@@ -4,7 +4,6 @@ Do not call directly: use `./sr render` / `./sr anim`, which set
 SR_LESSON, SR_SLIDE and optionally SR_ONLY_BEAT (render a single animation beat) and
 SR_FAKE_AUDIO (seconds per piece when audio has not been generated yet).
 """
-import importlib.util
 import json
 import os
 
@@ -12,30 +11,13 @@ import numpy as np
 from manim import (ORIGIN, Create, FadeIn, FadeOut, ImageMobject, Rectangle, ReplacementTransform,
                    RoundedRectangle, Scene, config, linear)
 
-from . import templates
 from .anim_api import BACKGROUND, YELLOW, Steps
 from .config import Lesson
 from .pdf_extract import load_lines, resolve_highlight, resolve_image
 from .script_io import load_script, normalize_step, piece_key
+from .validate import find_animation, load_custom_animations
 
 config.background_color = BACKGROUND
-
-
-def load_custom_animations(lesson):
-    if not lesson.animations.exists():
-        return None
-    spec = importlib.util.spec_from_file_location(f"custom_{lesson.id.replace('-', '_')}", lesson.animations)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def find_animation(name, custom):
-    if custom is not None and hasattr(custom, name):
-        return getattr(custom, name)
-    if name in templates.TEMPLATES:
-        return templates.TEMPLATES[name]
-    raise ValueError(f"unknown animation '{name}' (not a template, not in animations file)")
 
 
 class LessonScene(Scene):
@@ -106,6 +88,9 @@ class LessonScene(Scene):
                 steps = Steps(self, pieces, gap)
                 find_animation(beat["anim"], custom)(self, steps, **beat.get("args", {}))
                 steps.finish()
+                if settings["visual"] != "animated" and img not in self.mobjects:
+                    self.add(img)                        # an animation removed the slide: put it back
+                    self.bring_to_back(img)
                 new = [m for m in self.mobjects if m not in before]
                 self.play(*[FadeOut(m) for m in new], run_time=0.4)
                 self.remove(*new)

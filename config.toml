@@ -41,11 +41,19 @@ preview_image_width = 1280
 small_height = 720
 
 [agent]
-# Who writes the script when you run ./sr make:
-#   "claude-code" = Claude Code CLI in headless mode, using your Claude login (subscription)
+# The program calls an agent for the tasks that need judgment (planning, writing, judging frames).
+#   "claude-code"   = Claude Code CLI in headless mode, using your Claude login (subscription)
 #   "anthropic-api" = Anthropic API key (planned, not implemented yet)
 backend = "claude-code"
 # Model for the agent ("" = Claude Code default)
 model = ""
-# After the final render, let the agent look at the frames and fix layout problems (one pass)
+# Slides written per agent task (smaller = more focused tasks, more calls)
+group_size = 4
+# Rounds of "render animations -> agent judges the frames -> fix" per group
+animation_rounds = 2
+# Seconds per narration step when animations are previewed before the audio exists
+placeholder_seconds = 5
+# After the final render, the agent judges the frames and fixes real defects
 review = true
+# Slides per review task
+review_group_size = 5

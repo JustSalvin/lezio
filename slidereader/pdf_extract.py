@@ -121,8 +121,19 @@ def resolve_highlight(slide_data, spec):
     """Bounding box (PDF points) for a highlight spec.
 
     spec: 3 | [3, 5] (line numbers, as listed in overview.md) | "phrase" | ["start phrase", "end phrase"]
+          | {"lines": [2, 4, 6]} (exactly these lines, e.g. one column of a two-column table)
     """
     lines = slide_data["lines"]
+    if isinstance(spec, dict):
+        picked = spec.get("lines")
+        if not isinstance(picked, list) or not picked or not all(isinstance(k, int) for k in picked):
+            raise ValueError(f"bad highlight spec: {spec!r} (expected {{\"lines\": [numbers]}})")
+        bad = [k for k in picked if not 1 <= k <= len(lines)]
+        if bad:
+            raise ValueError(f"lines {bad} do not exist (slide has {len(lines)} lines)")
+        boxes = [lines[k - 1]["bbox"] for k in picked]
+        return [min(b[0] for b in boxes), min(b[1] for b in boxes),
+                max(b[2] for b in boxes), max(b[3] for b in boxes)]
     if isinstance(spec, (int, str)):
         spec = [spec]
     if not isinstance(spec, list) or not 1 <= len(spec) <= 2:

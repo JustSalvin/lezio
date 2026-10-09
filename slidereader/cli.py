@@ -18,8 +18,6 @@ from .script_io import (DEPTHS, VISUAL_MODES, audio_pieces, load_script, normali
                         parse_slide_list, piece_key)
 
 ENV = {**os.environ, "PATH": f"{ROOT / '.venv' / 'bin'}:{os.environ.get('PATH', '')}", "PYTHONPATH": str(ROOT)}
-BEAT_KEYS = {"say", "highlight", "image", "zoom", "pause"}
-ANIM_KEYS = {"anim", "steps", "args"}
 STUB = {"settings": {"skip": []}, "slides": []}
 
 
@@ -64,7 +62,8 @@ def fingerprint(lesson, settings, slide):
     for k, _, _ in audio_pieces([slide]):
         h.update(f"{k}:{have.get(k, {}).get('duration')}".encode())
     code = [ROOT / "slidereader" / f for f in ("engine.py", "templates.py", "anim_api.py")]
-    for f in code + ([lesson.animations] if lesson.animations.exists() else []):
+    from .validate import animation_files
+    for f in code + animation_files(lesson):
         h.update(f.read_bytes())
     return h.hexdigest()
 
@@ -122,95 +121,16 @@ def cmd_init(a):
 Lesson id: {lesson.id}   ({pages} slides)
   overview (text lines + hints): {rel(lesson.overview)}
   slide previews:                {rel(lesson.preview)}/slide_NN.jpg
-  script to write:               {rel(lesson.script)}
-  custom animations (optional):  {rel(lesson.animations)}
-Next: read the overview, look at the previews, write the script, then ./sr check {lesson.id}""")
+  script:                        {rel(lesson.script)}""")
 
 
 def cmd_check(a):
-    from .engine import find_animation, load_custom_animations
-    from .pdf_extract import load_lines, resolve_highlight, resolve_image
+    from .validate import validate
     lesson = Lesson(a.lesson)
     settings, slides = load_script(lesson.script)
-    lines = load_lines(lesson)
-    pages = lines["pages"]
-    errors, warnings = [], []
-    try:
-        custom = load_custom_animations(lesson)
-    except Exception as e:  # noqa: BLE001
-        custom = None
-        errors.append(f"{lesson.animations.name}: cannot be imported: {e!r}")
-
-    def check_text(where, text):
-        if not isinstance(text, str) or not text.strip():
-            errors.append(f"{where}: empty or missing \"say\"")
-            return
-        if re.search(r"\d", text):
-            warnings.append(f"{where}: digits in narration - write numbers as words: {text[:60]!r}")
-        if len(text.split()) > 70:
-            warnings.append(f"{where}: {len(text.split())} words - split into shorter beats")
-
+    errors, warnings = validate(lesson, settings, slides)
     visual = settings["visual"]
-    if visual not in VISUAL_MODES:
-        errors.append(f"settings.visual must be one of {VISUAL_MODES}")
-    if settings["depth"] not in DEPTHS:
-        errors.append(f"settings.depth must be one of {sorted(DEPTHS)}")
-
-    seen = []
-    for s in slides:
-        n = s.get("slide")
-        if not isinstance(n, int) or not 1 <= n <= pages:
-            errors.append(f"slide entry {s!r:.60}: \"slide\" must be a page number 1..{pages}")
-            continue
-        if n in seen:
-            errors.append(f"slide {n}: appears twice")
-        seen.append(n)
-        beats = s.get("beats")
-        if not beats:
-            errors.append(f"slide {n}: no beats")
-            continue
-        data = lines["slides"][str(n)]
-        for k, beat in enumerate(beats):
-            where = f"slide {n} beat {k}"
-            if "anim" in beat and visual == "slides":
-                errors.append(f"{where}: visual mode \"slides\" allows no animations")
-            if "anim" not in beat and visual == "animated":
-                errors.append(f"{where}: visual mode \"animated\" needs an \"anim\" in every beat")
-            if "anim" in beat:
-                if set(beat) - ANIM_KEYS:
-                    errors.append(f"{where}: unknown keys {sorted(set(beat) - ANIM_KEYS)}")
-                if not beat.get("steps"):
-                    errors.append(f"{where}: animation without \"steps\"")
-                for j, st in enumerate(beat.get("steps", [])):
-                    check_text(f"{where} step {j}", normalize_step(st).get("say"))
-                try:
-                    fn = find_animation(beat["anim"], custom)
-                    inspect.signature(fn).bind(None, None, **beat.get("args", {}))
-                except ValueError as e:
-                    errors.append(f"{where}: {e}")
-                except TypeError as e:
-                    errors.append(f"{where}: wrong args for '{beat['anim']}': {e}")
-                continue
-            if set(beat) - BEAT_KEYS:
-                errors.append(f"{where}: unknown keys {sorted(set(beat) - BEAT_KEYS)}")
-            visuals = [key for key in ("highlight", "image", "zoom") if key in beat]
-            if len(visuals) > 1:
-                errors.append(f"{where}: use only one of highlight / image / zoom")
-            check_text(where, beat.get("say"))
-            try:
-                if "highlight" in beat:
-                    resolve_highlight(data, beat["highlight"])
-                if "image" in beat:
-                    resolve_image(data, beat["image"])
-            except ValueError as e:
-                errors.append(f"{where}: {e}")
-    if seen != sorted(seen):
-        warnings.append("slides are not in ascending order (the video follows the script order)")
-    in_scope = parse_slide_list(settings["pages"], range(1, pages + 1))
-    missing = sorted(set(in_scope) - set(seen) - set(settings["skip"]))
-    if missing:
-        warnings.append(f"pages neither narrated nor in settings.skip: {missing}")
-
+    seen = [s["slide"] for s in slides if isinstance(s, dict) and "slide" in s]
     words = sum(len(t.split()) for _, t, _ in audio_pieces(slides))
     print(f"Mode: visual={visual}, depth={settings['depth']} ({DEPTHS.get(settings['depth'], '?')}), "
           f"pages={settings['pages'] or 'all'}")
@@ -358,69 +278,8 @@ def cmd_status(a):
 
 
 def cmd_make(a):
-    """The full program: choose a PDF and the modes, then init -> agent -> audio -> render -> review -> join."""
-    from .agent import FIX_PROMPT, REVIEW_PROMPT, WRITE_PROMPT, ask, get_backend
-    from .script_io import default_settings
-
-    backend = get_backend()
-    pdf = a.pdf
-    if not pdf:
-        pdfs = sorted(INPUT.glob("*.pdf"))
-        if not pdfs:
-            die("put a PDF in input/ first (or pass its path: ./sr make file.pdf)")
-        print("PDFs in input/:")
-        for i, f in enumerate(pdfs, 1):
-            print(f"  {i}. {f.name}")
-        pick = ask("Which PDF", list(range(1, len(pdfs) + 1)), 1)
-        pdf = str(pdfs[int(pick) - 1])
-    d = default_settings()
-    pages = a.pages if a.pages is not None else ask("Pages to cover (e.g. 1-20, empty = all)", default="")
-    visual = a.visual or ask("Visual mode: slides | mixed | animated", list(VISUAL_MODES), d["visual"])
-    depth = a.depth or int(ask("Depth: 1 extensive, 2 faithful, 3 condensed, 4 short", [1, 2, 3, 4], d["depth"]))
-
-    init_args = argparse.Namespace(pdf=pdf, id=a.id)
-    cmd_init(init_args)
-    lesson = Lesson(a.id or slugify(Path(pdf).stem))
-    current = json.loads(lesson.script.read_text())
-    if current.get("slides") and not a.rewrite:
-        print(f"\n{lesson.script.relative_to(ROOT)} already has {len(current['slides'])} slides.")
-        if (ask("Rewrite it from scratch (y) or keep it and just build (n)", ["y", "n"], "n") or "n") == "y":
-            current = {"slides": []}
-    else:
-        current = {"slides": []} if a.rewrite else current
-    settings = {**current.get("settings", {}), "visual": visual, "depth": int(depth), "pages": pages or ""}
-    settings.setdefault("skip", [])
-    lesson.script.write_text(json.dumps({"settings": settings, "slides": current.get("slides", [])},
-                                        ensure_ascii=False, indent=2) + "\n")
-    logs = lesson.build / "logs"
-    fmt = dict(id=lesson.id, visual=visual, depth=depth, depth_name=DEPTHS[int(depth)],
-               pages=pages or "all", language=default_settings()["language"])
-
-    if not current.get("slides"):
-        print(f"\n== Agent ({backend.name}) writes the script - this is the only step that needs an AI")
-        backend.run(WRITE_PROMPT.format(**fmt), logs / "agent_write.jsonl")
-    for attempt in range(3):
-        r = subprocess.run([str(ROOT / "sr"), "check", lesson.id], capture_output=True, text=True, env=ENV)
-        print(r.stdout.strip())
-        if r.returncode == 0:
-            break
-        if attempt == 2:
-            die("the script still has errors - fix them (or ask the agent) and run ./sr make again")
-        print(f"\n== Agent fixes the script (attempt {attempt + 1})")
-        backend.run(FIX_PROMPT.format(id=lesson.id, report=r.stdout), logs / "agent_fix.jsonl")
-
-    build_args = argparse.Namespace(lesson=lesson.id, slides="", preview=False, outdated=True, small=True)
-    print("\n== Narration audio")
-    cmd_audio(build_args)
-    print("\n== Video")
-    cmd_render(build_args)
-    if CONFIG["agent"]["review"] and not a.no_review:
-        print("\n== Agent review of the rendered frames")
-        backend.run(REVIEW_PROMPT.format(id=lesson.id), logs / "agent_review.jsonl")
-        cmd_audio(build_args)
-        cmd_render(build_args)
-    print("\n== Final video")
-    cmd_join(build_args)
+    from .pipeline import make
+    make(a)
 
 
 def cmd_templates(a):
@@ -434,14 +293,14 @@ def main():
     ap = argparse.ArgumentParser(prog="./sr", description="Turn PDF slides into a narrated video lecture.")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("make", help="THE PROGRAM: PDF -> agent writes the script -> finished video")
+    p = sub.add_parser("make", help="THE PROGRAM: PDF -> finished video (calls the agent for the writing)")
     p.add_argument("pdf", nargs="?", help="PDF path (default: choose from input/)")
     p.add_argument("--id", help="lesson id (default: derived from the file name)")
     p.add_argument("--pages", help="pages to cover, e.g. 1-20 (default: all)")
     p.add_argument("--visual", choices=VISUAL_MODES)
     p.add_argument("--depth", type=int, choices=sorted(DEPTHS))
     p.add_argument("--rewrite", action="store_true", help="discard an existing script and write a new one")
-    p.add_argument("--no-review", action="store_true", help="skip the agent review of the rendered frames")
+    p.add_argument("--no-review", action="store_true", help="skip the final review of the rendered frames")
     p.set_defaults(fn=cmd_make)
 
     p = sub.add_parser("init", help="register a PDF: slide images, text lines, overview, empty script")

@@ -1,223 +1,203 @@
-# AGENTS.md — instructions for the AI agent
+# AGENTS.md — reference for agent tasks
 
-You are the creative part of **slide-reader**, a program that turns a PDF slide deck into a narrated,
-animated video lecture. Everything mechanical is already automated by the `./sr` command (PDF analysis,
-validation, speech synthesis, rendering, joining). **Your job is the part that needs judgment:**
-understanding the slides, writing the narration script, designing explanation animations, and
-checking the result visually.
+**slide-reader is a program, not an agent workflow.** The program (`./sr make`) runs the whole process:
+it reads the PDF, splits the work, validates everything, synthesizes the voice, renders and edits the
+video. It calls an AI agent only for the steps that need judgment, **one narrow task at a time**:
 
-Follow this file exactly. Do not improvise new tooling.
+| Task | The agent receives | The agent writes |
+|---|---|---|
+| plan | overview of the slides, slide pictures | `build/<id>/agent/plan.json` |
+| write | one group of 3–5 slides (text lines, pictures, plan notes, context) | `build/<id>/agent/group_NN.json` (+ optional `animations/<id>/group_NN.py`) |
+| fix | a list of problems found by the program | the file named in the task |
+| judge animations | contact sheets of the rendered animations | a verdict JSON (+ fixes) |
+| review | contact sheets of the final video | a verdict JSON (+ fixes in the script) |
 
----
+The task prompt always names the sections of this file to read, the inputs, and the **only files you may
+write**. You cannot run commands: the program validates and renders after you, and sends problems back
+in a fix task. Do exactly the task, write the output file, reply with one short line, stop.
 
-## 0. How you were started
-
-- **Started by `./sr make`** (the prompt mentions the lesson id and says the settings are already in
-  the script): do only what the prompt asks — usually sections 2–6. The program runs audio, rendering
-  and joining after you. You may only write `scripts/<id>.json` and `animations/<id>.py` and run
-  `./sr check`, `./sr anim`, `./sr templates`, `./sr status`.
-- **Started by a person** ("read AGENTS.md"): do the whole pipeline, sections 1–8. Ask the person only
-  what you cannot infer (which PDF if `input/` has several, pages, visual mode, depth); otherwise use
-  the defaults in `config.toml` and say which ones you used.
-
-**Never** edit files under `slidereader/`, `config.toml`, `setup.sh` or `sr`. If the tool seems
-broken, stop and report the exact command and error.
+All instructions here are in English; **everything you write for the video (narration, on-screen texts)
+is in the lesson language** given in the task (default Italian).
 
 ---
 
-## 1. Set up the lesson (person-started only)
+## 1. Inputs you can read
 
-```bash
-./sr init "input/<file>.pdf"            # optional: --id short-name
-```
-
-This prints the **lesson id** and creates:
-
-| Path | What it is |
+| Path | Content |
 |---|---|
-| `build/<id>/overview.md` | every slide's text lines (numbered `L1`, `L2`, ...), images, hints |
-| `build/<id>/preview/slide_NN.jpg` | slide pictures — **look at them** |
-| `scripts/<id>.json` | the script you will write (starts empty) |
-| `animations/<id>.py` | optional custom animations (create it only if needed) |
-
-Write the chosen settings into `scripts/<id>.json` (see section 3). Defaults come from `config.toml`.
-
----
-
-## 2. Understand the slides
-
-1. Read `build/<id>/overview.md` completely.
-2. **Open every preview image** of the pages in scope (`settings.pages`). Many slides are pictures,
-   diagrams or tables whose meaning is not in the extracted text. Never narrate a slide you have not seen.
-3. Classify each slide:
-   - **title** (course, lecture, author) · **agenda** (plan of the lecture) · **section divider**
-     (one big word or picture) · **content** (bullets, definitions, examples) · **diagram/table/code/formula**
-     · **interactive** (live poll/quiz such as Mentimeter, Kahoot, Wooclap — the overview flags them)
-     · **references/thanks**.
-   - **Interactive** slides are **skipped**: add the page number to `settings.skip` and do not narrate it.
-4. Build a mental outline of the whole lecture: what each section is for, which concepts come back later.
-   Good narration connects slides ("as we saw with the traffic light...", "we will need this in a moment").
+| `build/<id>/overview.md` | every page: text lines numbered `L1, L2, ...` (repeated headers/footers removed), images, hints |
+| `build/<id>/preview/slide_NN.jpg` | picture of page NN — **open the ones of your task**; many slides are pictures or diagrams |
+| `build/<id>/agent/plan.json` | the lesson plan (after the plan task) |
+| `scripts/<id>.json` | the script assembled so far by the program |
+| `slidereader/templates.py` | animation templates with full argument documentation |
+| `animations/b1-rappresentazione-informazione.py` | complete examples of custom animations |
+| `scripts/b1-rappresentazione-informazione.json` | a complete example script (visual `mixed`, depth 1, Italian) |
 
 ---
 
-## 3. Write the script — `scripts/<id>.json`
+## 2. Plan task
 
-### 3.1 Format
+Read the overview and **open every slide picture in scope**. Then write the plan file:
 
 ```json
 {
-  "settings": {
-    "visual": "mixed",
-    "depth": 1,
-    "pages": "1-20",
-    "skip": [14]
-  },
+  "title": "Rappresentazione dell'informazione",
+  "outline": "Three to six sentences: what the lecture is about, its parts, how they connect.",
+  "slides": [
+    {"slide": 1, "kind": "title", "skip": false, "summary": "Course, lecture title and author.", "visual_idea": "none"},
+    {"slide": 10, "kind": "diagram", "skip": false,
+     "summary": "Harvard vs von Neumann: separate memories vs a single memory.",
+     "visual_idea": "custom: the two memories merge; one word read as number or instruction"},
+    {"slide": 14, "kind": "interactive", "skip": true, "summary": "Mentimeter quiz.", "visual_idea": "none"}
+  ]
+}
+```
+
+- One entry per page in scope, in page order. `kind`: `title`, `agenda`, `divider`, `content`, `diagram`,
+  `interactive`, `references`, `other`.
+- `skip: true` for interactive slides (live polls/quizzes: Mentimeter, Kahoot, Wooclap, Slido...) and,
+  at depth 4, for minor slides. Everything else `false`.
+- `summary`: one sentence on what the slide says (it is given to the writer of neighbouring slides).
+- `visual_idea`: `none`, `template <name>: <what it shows>` or `custom: <what it shows>` (see section 5).
+  Visual mode `slides`: always `none`. Mode `animated`: never `none`.
+
+---
+
+## 3. Script format (write task)
+
+A group file is `{"slides": [ ... ]}` with exactly the slides of the task, in the given order:
+
+```json
+{
   "slides": [
     {
       "slide": 9,
       "beats": [
-        { "say": "Il linguaggio di un calcolatore.", "highlight": 1 },
-        { "say": "Un moderno calcolatore è un sistema elettronico, digitale, programmabile.",
-          "highlight": [2, 4] },
-        { "say": "Lo vedete nello schema a destra...", "image": true },
-        { "anim": "flow",
-          "args": { "items": ["Comunicazione", "Linguaggio", "Informazione"], "title": "Le parole chiave" },
-          "steps": [
-            "Per comunicare serve un linguaggio...",
-            { "say": "Prima domanda: ...?", "pause": 3 }
-          ] },
-        { "say": "Ed è proprio per questo che..." }
+        {"say": "Il linguaggio di un calcolatore.", "highlight": 1},
+        {"say": "Un moderno calcolatore è un sistema elettronico, digitale, programmabile.", "highlight": [2, 4]},
+        {"say": "Lo vedete nello schema a destra.", "image": true},
+        {"anim": "flow",
+         "args": {"items": ["Programma", "Istruzioni", "Memoria"], "title": "Dal programma alla memoria"},
+         "steps": ["Prima frase della spiegazione animata...", {"say": "E voi, che cosa ne pensate?", "pause": 2}]},
+        {"say": "Ed è proprio per questo che..."}
       ]
     }
   ]
 }
 ```
 
-**settings** (keep what the program wrote; person-started: fill them in)
-
-| Key | Values | Meaning |
-|---|---|---|
-| `visual` | `slides` · `mixed` · `animated` | see 3.3 |
-| `depth` | `1` · `2` · `3` · `4` | see 3.2 |
-| `pages` | `"1-20"`, `"3,5-9"`, `""` = all | PDF pages in scope |
-| `skip` | list of page numbers | pages in scope deliberately not narrated |
-| `voice`, `temperature`, `beat_gap` | optional | override `config.toml` (normally leave out) |
-
-**slides**: one entry per narrated page, **in the order they are shown** (normally ascending).
-`slide` is the PDF page number. Each slide has a list of **beats**; a beat is one spoken piece
-(one audio file) plus what is shown meanwhile:
+A **beat** is one spoken piece (one audio file) plus what is shown meanwhile:
 
 | Beat | Shows |
 |---|---|
-| `{"say": "...", "highlight": X}` | the slide, with a yellow frame around lines X |
-| `{"say": "...", "image": true}` | the slide, framing its largest image (`"image": 2` = image #2 in the overview) |
-| `{"say": "...", "zoom": true}` | the slide with a slow zoom (picture slides, section dividers) |
-| `{"say": "..."}` | the slide, no frame |
-| `{"anim": "name", "args": {...}, "steps": [...]}` | a full-screen animation; **each step is one spoken piece** |
+| `{"say": ..., "highlight": X}` | the slide with a yellow frame around lines X |
+| `{"say": ..., "image": true}` | the slide, framing its largest image (`"image": 2` = image #2 of the overview) |
+| `{"say": ..., "zoom": true}` | the slide with a slow zoom (picture slides, section dividers) |
+| `{"say": ...}` | the slide, no frame |
+| `{"anim": name, "args": {...}, "steps": [...]}` | a full-screen animation; **each step is one spoken piece** |
 
-Highlight `X` can be:
-- a line number from the overview: `3`, or a range `[3, 5]` — **preferred**, exact and robust;
-- a phrase contained in one line: `"Accordo sulla semantica"`, or `["start phrase", "end phrase"]`.
+- Highlight `X`: a line number of the overview (`3`) or a range (`[3, 5]`) — preferred; or exactly some
+  lines (`{"lines": [2, 4, 6]}`, e.g. one column of a two-column table, whose lines the overview lists
+  interleaved); or a phrase contained in one line (`"Accordo sulla semantica"`) or
+  `["start phrase", "end phrase"]`. The frame is the rectangle enclosing the chosen lines.
+- `"pause": seconds` on a beat or step adds silence after it.
+- Keys are exactly these; anything else is rejected by the program.
 
-Optional `"pause": seconds` on a beat or step adds silence after it (e.g. after a question to the viewer).
-
-### 3.2 Depth — how much to say
-
-| depth | name | Rule | Typical length per content slide |
-|---|---|---|---|
-| 1 | extensive | Say **everything** on the slide, then go deeper: explain each term, give a concrete example or analogy, connect to earlier/later slides, ask rhetorical questions. Never summarize. | 1–3 min |
-| 2 | faithful | Say **everything** on the slide, rephrased naturally for speech. Clarify only what would be unclear when heard. No extra examples, no digressions. Never summarize. | 0.5–1.5 min |
-| 3 | condensed | The main points of each slide, lightly summarized; merge minor details; drop repetitions. Consecutive thin slides can share one short beat each. | 20–45 s |
-| 4 | short | Short-video style: only the key idea of each section, punchy sentences, strong hook at the start and a one-line takeaway at the end. Skip minor slides (put them in `skip`). | 5–15 s; the whole video a few minutes |
-
-At depth 1–2 **every text element of the slide must be spoken** (titles, bullets, sub-bullets, labels of
-diagrams, examples). Check this slide by slide before moving on.
-
-### 3.3 Visual mode — what is shown
+**Visual mode rules**
 
 | visual | Rules |
 |---|---|
-| `slides` | Only the original slides. **No `anim` beats.** Use `highlight` on almost every beat; `image` for figures; `zoom` for picture slides. |
-| `mixed` | Slides with highlights, plus full-screen `anim` beats where a concept is easier to see than to read (see 4.1). Return to the slide afterwards. |
-| `animated` | The slides are only the source and are **never shown**. **Every beat is an `anim`.** Rebuild each slide's content with templates (`title_card` for title/sections, `bullets` for text slides, `diagram`/`flow`/`compare`/... for the rest) plus custom animations. |
-
-### 3.4 Writing rules (all depths)
-
-- **Language**: the narration and every on-screen animation text are in the lesson language
-  (`[narration] language` in `config.toml`, default Italian). These instructions are in English; the
-  script is not.
-- **Write for the ear** — the text is read by a speech synthesizer:
-  - numbers in words ("mille e ventiquattro", not "1024"; "uno a uno", not "1-1"); `./sr check` warns
-    about digits;
-  - symbols and formulas spoken ("o grande di enne", "a più bi", "due alla decima");
-  - acronyms as they are pronounced (decide per acronym: "ALU" is said as a word, "GPS" letter by letter);
-  - foreign names written phonetically for the voice ("von Noiman" for von Neumann);
-  - code read the way a teacher reads it ("l'istruzione add, ci, a, bi");
-  - no parentheses, slashes, bullet symbols, markdown or emoji; use commas and full stops.
-- **Beats**: one beat = one idea = one highlight. 1–3 sentences, roughly 8–60 words (never more than 70).
-  Split long bullets into two beats with the same or adjacent highlights.
-- **Highlights follow the voice**: the frame must be on the line being talked about. Typical pattern:
-  title beat → one beat per bullet (sub-bullets included in its range or in their own beat).
-- **Tone**: a clear, warm university lecturer. Use "noi"/"vediamo"/"notate", rhetorical questions,
-  emphasis on key words ("e questo è il punto chiave"). Vary sentence openings; avoid filler.
-- **Faithful content**: never contradict or invent facts. Added examples must be clearly examples and
-  correct. Refer to the slides' author in the third person ("le slide del professor ..."); never claim to
-  be them.
-- **Special slides**:
-  - title: welcome, lecture title, course, author/affiliation (do not read e-mail addresses aloud; say
-    they are on the slide);
-  - agenda: one beat per item, with a few words on what each part is for;
-  - section divider / picture slide: `zoom`, say which part starts, describe the picture briefly and
-    connect it to the topic;
-  - diagram/table: `image` highlight, then walk through it in reading order;
-  - interactive poll/quiz: skip (see section 2);
-  - references/thanks: one short beat (depth 3–4: skip).
-- **Flow between slides**: the first beat of a slide links to the previous one when natural; the last
-  slide in scope ends with a short closing (what was covered, what comes next).
+| `slides` | no `anim` beats; highlight almost every beat; `image` for figures; `zoom` for picture slides |
+| `mixed` | slides with highlights + `anim` beats where seeing beats reading (section 5); then back to the slide |
+| `animated` | **every beat is an `anim`**; the slide is never shown — rebuild its content with `title_card`, `bullets`, `diagram`, `flow`, ... and custom animations |
 
 ---
 
-## 4. Animations
+## 4. Writing rules (write task)
 
-### 4.1 When (visual = mixed)
+### 4.1 Depth
 
-Use an animation when **seeing** a process, a comparison, a transformation or a structure explains it
-better than the slide: encodings and conversions, architectures and data flows, cause → effect,
-before/after, step-by-step procedures, a concrete example of an abstract rule.
-Guideline: depth 1 → about one every one or two content slides; depth 2 → only for diagrams or
-processes; depth 3 → rare; depth 4 → a few strong ones. Never animate just to decorate.
+| depth | Rule | Typical length per content slide |
+|---|---|---|
+| 1 extensive | Say **everything** on the slide, then go deeper: explain each term, give a concrete example or analogy, connect to earlier/later slides, ask rhetorical questions. Never summarize. | 1–3 min |
+| 2 faithful | Say **everything** on the slide, rephrased naturally for speech. Clarify only what would be unclear when heard. No extra examples. Never summarize. | 0.5–1.5 min |
+| 3 condensed | Main points of each slide, lightly summarized; merge minor details; drop repetitions. | 20–45 s |
+| 4 short | Short-video style: the key idea only, punchy sentences, a hook at the start, a one-line takeaway at the end. | 5–15 s |
 
-### 4.2 Templates first
+At depth 1–2 **every text element of the slide is spoken**: title, bullets, sub-bullets, labels of
+diagrams, examples. Check each slide line by line against the overview before finishing.
 
-`./sr templates` prints every ready-made animation with its arguments. Summary:
+### 4.2 Write for the ear (the text is read by a speech synthesizer)
+
+- Numbers in words ("mille e ventiquattro", "uno a uno"). **Digits are rejected by the program.**
+- Symbols and formulas spoken ("o grande di enne", "a più bi", "due alla decima").
+- Acronyms as pronounced: decide per acronym ("ALU" as a word, "GPS" letter by letter).
+- Foreign names written phonetically ("von Noiman" for von Neumann).
+- Code read like a teacher reads it ("l'istruzione add, ci, a, bi").
+- No parentheses, slashes, bullet symbols, markdown or emoji: commas and full stops only.
+
+### 4.3 Beats and highlights
+
+- One beat = one idea = one highlight. 1–3 sentences, about 8–60 words (more than 70 is rejected).
+- The frame must be on the line being talked about: title beat, then one beat per bullet (a bullet and
+  its sub-bullets together, or sub-bullets in their own beats).
+- Prefer line numbers from the overview for highlights.
+
+### 4.4 Tone and content
+
+- A clear, warm university lecturer: "vediamo", "notate", rhetorical questions, emphasis on key points.
+  Vary sentence openings, no filler.
+- Never contradict or invent facts. Added examples must be correct and clearly examples.
+- Refer to the slides' author in the third person; never claim to be them.
+- Special slides: **title** — welcome, lecture title, course, author (do not read e-mail addresses,
+  say they are on the slide); **agenda** — one beat per item; **divider/picture** — `zoom`, say which part
+  starts, describe the picture briefly; **diagram/table** — `image`, then walk through it in reading
+  order; **references** — one short beat.
+- Continuity: the task tells you how the previous slide ended and what comes next. Link naturally; do not
+  welcome again after the first group; the last group ends with a short closing.
+
+---
+
+## 5. Animations (write task)
+
+### 5.1 When
+
+Use an animation when **seeing** explains better than reading: processes, transformations, encodings,
+architectures and data flows, comparisons, cause → effect, a concrete example of an abstract rule.
+Depth 1: about one every one or two content slides; depth 2: only for diagrams/processes; depth 3: rare;
+depth 4: a few strong ones. Never just decoration. Follow the plan's `visual_idea` unless you find better.
+
+### 5.2 Templates first
+
+Full arguments: docstrings in `slidereader/templates.py`.
 
 | Template | Use it for |
 |---|---|
-| `title_card` | lesson opening, section change (animated mode) |
+| `title_card` | lecture opening, section change (animated mode) |
 | `bullets` | a text slide rebuilt as revealed bullet points (animated mode) |
 | `statement` | one to four big sentences: definitions, take-home messages |
-| `flow` | a chain of 2–6 boxes: a process, an evolution, a recap of concepts |
+| `flow` | a chain of 2–6 boxes: a process, an evolution, a recap |
 | `mapping` | rows "left → right": property → consequence, term → meaning |
-| `compare` | two columns: A vs B, before/after, good vs bad |
+| `compare` | two columns: A vs B, before/after |
 | `cards` | several possible options, then one is selected |
 | `encode` | symbols → codes (→ symbols again); Morse dots/dashes or text codes |
-| `translate` | source → translator box → result (compiler, assembler, any conversion) |
-| `number_base` | a number in base 10 and in another base, with positional weights and sum |
-| `diagram` | any boxes-and-arrows picture, revealed in phases (architectures, actors, data flows) |
+| `translate` | source → translator box → result (compiler, assembler, conversion) |
+| `number_base` | a number in base 10 and in another base, with weights and sum |
+| `diagram` | any boxes-and-arrows picture revealed in phases (coordinates x −6.5..6.5, y −3.5..3.2) |
 
-Templates spread their phases over the `steps` you give them: with as many steps as phases, each phase
-starts with its sentence. Write one step per phase whenever you can.
+Templates spread their phases over the steps: give one step per phase whenever possible
+(`flow` with four items → four steps).
 
-### 4.3 Custom animations (only when no template fits)
+### 5.3 Custom animations (only when no template fits)
 
-Write functions in `animations/<id>.py`. Each function is referenced by name in an `anim` beat and
-receives `(scene, steps, **args)`:
+Write them in the animation file named by the task; every function name must start with the prefix
+given in the task (e.g. `g03_`). Signature `(scene, steps, **args)`:
 
 ```python
 from slidereader.anim_api import *   # Manim + house style + helpers
 
 
-def segment_decay(scene, steps):
+def g03_segment_decay(scene, steps):
     t = steps()                                    # step 1 starts: its audio plays now
     eight = T("8", 160, RED, bold=True)
     t.play(FadeIn(eight), rt=0.6)                  # rt = run time in seconds
@@ -225,97 +205,38 @@ def segment_decay(scene, steps):
     t.play(Indicate(eight), rt=0.8)
 
     t = steps()                                    # step 2
-    three = T("3", 160, RED, bold=True)
-    t.play(Transform(eight, three), rt=0.8)
+    t.play(Transform(eight, T("3", 160, RED, bold=True)), rt=0.8)
 ```
 
-- Call `steps()` exactly once per step written in the script, in order. Remaining time of each step
-  is waited automatically.
+- Call `steps()` exactly once per step of the beat, in order; leftover time is waited automatically.
 - Helpers: `T(text, size, color, bold=False, font=FONT|MONO)`, `box(text, w, h, size, color, fill)`,
   `arrow(start, end, color, double=False)`, `person(color)`, `check()`, `cross()`, `wrap(text, width)`.
 - Colors: `BLUE`, `BLUE_LIGHT`, `ORANGE`, `ORANGE_LIGHT`, `GREEN`, `GREEN_LIGHT`, `YELLOW`,
-  `YELLOW_LIGHT`, `RED`, `DARK`, `GREY` (white background).
-- Layout: the frame is x ∈ [−7.1, 7.1], y ∈ [−4, 4]. Keep everything inside x ∈ [−6.6, 6.6],
-  y ∈ [−3.6, 3.4]. Text sizes: titles 36–44, body 28–36, big symbols 90–160.
-- Pitfalls: Manim `Text` does not wrap (use `wrap()`); **LaTeX is not installed** (no `MathTex`/`Tex`,
-  write formulas with `T()`); do not animate the same object twice in one `t.play(...)`; keep on-screen
-  texts short (labels, not sentences).
-- Read `animations/b1-rappresentazione-informazione.py` for complete working examples.
-
-### 4.4 Check every animation visually
-
-```bash
-./sr anim <id> --all                 # or --slide 10 --beat 4
-```
-
-Each animation is rendered alone (fast, low resolution; placeholder timing if audio does not exist yet)
-and a contact sheet is written to `build/<id>/qa/anim_sNN_bKK.png`. **Open every contact sheet** and
-fix: overlapping elements, text outside the frame or cut off, unreadable sizes, elements appearing at the
-wrong moment, leftovers that should have disappeared. Re-run until clean.
+  `YELLOW_LIGHT`, `RED`, `DARK`, `GREY`; white background.
+- Layout: frame x ∈ [−7.1, 7.1], y ∈ [−4, 4]; keep everything inside x ∈ [−6.6, 6.6], y ∈ [−3.6, 3.4].
+  Sizes: titles 36–44, body 28–36, big symbols 90–160.
+- Pitfalls: `Text` does not wrap (use `wrap()`); **no LaTeX** (no `MathTex`/`Tex`); do not animate the
+  same object twice in one `t.play(...)`; on-screen texts are short labels, not sentences.
+- Clean-up is done by the program: never `FadeOut`/`remove` `scene.mobjects` (that list also contains
+  the slide). To clear your own elements mid-animation, fade out the groups you created.
 
 ---
 
-## 5. Validate
+## 6. Judge animations task
 
-```bash
-./sr check <id>
-```
-
-Fix every `ERROR` (invalid JSON, unknown keys, highlight not found, unknown animation or wrong `args`,
-wrong beat type for the visual mode). Treat warnings seriously: digits in narration, beats too long,
-pages neither narrated nor skipped. Repeat until it prints `Script OK`.
-
----
-
-## 6. Hand-off (started by `./sr make`)
-
-Stop here. Reply with a short summary: slides covered, skipped pages and why, animations used,
-anything doubtful in the source slides.
+The program rendered each animation of your group alone and gives you contact sheets (frames in time
+order, left to right, top to bottom; placeholder timing before the audio exists). Open every sheet and
+look for: overlapping elements, text outside the frame or cut off, unreadable sizes, elements that never
+appear or never leave, an empty or confusing result, content that does not match the narration.
+Fix real defects in the group file (`args`) or in the group's animation file, then write the verdict
+`{"changed": true|false, "notes": "..."}`. Do not rewrite narration that is fine.
 
 ---
 
-## 7. Build (person-started only)
+## 7. Review task
 
-```bash
-./sr build <id> --small        # audio + final render + output/<id>.mp4 (+ a lightweight copy)
-```
-
-- Audio takes roughly as long as the narration itself; rendering a few minutes more. Run it in the
-  background if your environment allows, and poll `./sr status <id>`.
-- Only new or changed audio pieces and only outdated slides are regenerated, so after a fix run
-  `./sr build <id>` again.
-- Then do the review pass (section 8) on `build/<id>/qa/final_slide_NN.png`, rebuild if you changed
-  anything, and report the path of `output/<id>.mp4`.
-
----
-
-## 8. Review pass
-
-Open every `build/<id>/qa/final_slide_NN.png` (frames sampled from the final video). Look for:
-- a highlight frame on the wrong lines, or not on the line being discussed;
-- overlapping or cut-off text in animations, elements outside the frame;
-- an animation that ends too early or leaves the screen empty for long;
-- a slide shown while an unrelated animation should be on screen, or vice versa.
-
-Fix only real defects (highlight specs, animation layout, args). Do not rewrite the narration unless it
-does not match what is on screen. Run `./sr check <id>` and `./sr anim` for what you changed.
-The program (or `./sr build <id>`) re-renders only the slides that changed.
-
----
-
-## Command reference
-
-| Command | Purpose |
-|---|---|
-| `./sr init <pdf> [--id ID]` | analyse a PDF, create overview, previews and an empty script |
-| `./sr templates` | list animation templates and their arguments |
-| `./sr check <id>` | validate the script |
-| `./sr anim <id> --all \| --slide N [--beat K]` | render animations alone + contact sheets |
-| `./sr audio <id> [--slides 1,3-5]` | generate missing/changed narration audio |
-| `./sr render <id> [--slides ...] [--preview] [--outdated]` | render slides + contact sheets |
-| `./sr join <id> [--small]` | concatenate slide videos into `output/<id>.mp4` |
-| `./sr build <id> [--small]` | audio + render (outdated only) + join |
-| `./sr status <id>` | what is generated, missing or outdated |
-| `./sr make` | the full program (used by people; it starts you) |
-
-Render problems: the error line points to `build/<id>/logs/<name>.txt`; read its end.
+The program gives you contact sheets of the final video of a few slides. Look for: a highlight on the
+wrong lines, overlaps or cut-off text in animations, a screen left empty for long, an animation that does
+not match what is said. Fix only real defects in `scripts/<id>.json` (only the slides of your task) or in
+the lesson's animation files, then write the verdict JSON. The program re-validates, regenerates the
+changed audio and re-renders only the slides that changed.

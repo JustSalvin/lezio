@@ -30,6 +30,7 @@ class Lesson:
         self.pdf = ROOT / json.loads(meta.read_text())["pdf"]
         self.script = SCRIPTS / f"{lesson_id}.json"
         self.animations = ANIMATIONS / f"{lesson_id}.py"
+        self.animations_dir = ANIMATIONS / lesson_id
         self.output = OUTPUT / f"{lesson_id}.mp4"
         self.output_small = OUTPUT / f"{lesson_id}_{CONFIG['video']['small_height']}p.mp4"
         self.slides = self.build / "slides"
@@ -41,6 +42,7 @@ class Lesson:
         self.media = self.build / "media"
         self.video = self.build / "video"
         self.qa = self.build / "qa"
+        self.agent = self.build / "agent"
 
     @staticmethod
     def create(lesson_id: str, pdf: Path):
