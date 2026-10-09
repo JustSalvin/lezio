@@ -1,87 +1,118 @@
 # AGENTS.md — developer guide
 
-> **Rebuild in progress**: slide-reader is being rebuilt into **lezio** (study material → video lesson,
-> any style, one workflow). Before any change, read `docs/HANDOFF.md` and follow its execution plan.
-
-Guide for coding agents (and people) **developing** slide-reader. The program never reads this file at
-runtime: LLM tasks get their instructions from `slidereader/agent/prompts/`.
+Guide for coding agents (and people) **developing** lezio. The program never reads this file at runtime:
+LLM tasks get their instructions from `src/lezio/agent/prompts/`. How lezio came out of slide-reader:
+`docs/history.md`.
 
 ## What the program does
 
-`./sr` turns a PDF slide deck into a narrated video lecture. The program owns the whole process; an LLM
-is called only for narrow tasks, and only through tools the program defines.
+`./lezio` turns study material (PDF, Markdown/text, DOCX, pictures; one or more files) into a narrated
+video lesson. The program owns the whole process; an LLM is called only for narrow tasks, and only
+through tools the program defines.
 
 ```
-./sr ─ app/cli.py ─ app/run.py (Run) ─┬─ pdf.py                  slide images, text lines (L-numbers), images
-                                      ├─ agent/tasks.py          plan · write a group of slides · review
-                                      │    agent/prompts/*.md    the texts of the tasks
-                                      │    agent/backends/       LLM backends (Claude subscription, API planned)
-                                      ├─ validate.py             script validation (tools, check, run)
-                                      ├─ voice/client.py ─ voice/synthesize.py (in .venv-tts) ─ voice/engines/
-                                      └─ video/render.py ─ manim ─ video/scene.py, templates.py, anim_api.py
+./lezio ─ app/cli.py ─ app/run.py (Run) ─┬─ material/             ingest sources → build/material/index.json, refs
+                                         ├─ agent/tasks.py        plan · write segments · review (tools)
+                                         │    agent/prompts/      role, tasks, rules, styles, depth.toml
+                                         │    agent/backends/     LLM backends (Claude subscription; API planned)
+                                         ├─ validate.py           narration rules, scene code checks, script
+                                         ├─ voice/client.py ─ voice/synthesize.py (in .venv-tts) ─ voice/engines/
+                                         └─ video/render.py ─ manim ─ video/scene_runner.py ─ scenes/<id>.py
+                                                                        └─ lezio.scene (helper library)
 ```
 
-Flow of `./sr <pdf|lesson>`: resolve the per-video choices (wizard/options, saved choices) → summary →
-read PDF → plan task → write tasks (groups of `tuning.group_size` slides) → voice → render outdated
-slides → review task on the re-rendered slides → join. Every step is resumable.
+Flow of `./lezio <files|lesson>`: resolve the per-video choices (wizard/options, saved choices) → summary
+→ ingest new/changed sources → plan task (when there is no plan for the current sources/focus/style/depth)
+→ write tasks (`tuning.segments_per_task` segments each; every submission is checked and previewed) →
+voice → render outdated segments → review task on the re-rendered segments → re-render fixed → join.
+Every step is resumable. One workflow for every style: a style is only a prompt (`prompts/styles/`).
 
 ## Layout
 
 ```
-sr                         bash wrapper: python -m slidereader in .venv
+lezio                      bash wrapper: python -m lezio in .venv (PYTHONPATH=src)
 setup.sh                   installation (Homebrew libs, two venvs, TTS model download)
-config.toml                configuration (TTS, language, LLM, video, tuning)
-slidereader/
+config.toml                configuration (TTS, language, LLM, video, tuning) - also ./lezio config
+src/lezio/
   config.py                paths, CONFIG, environment for subprocesses
   lesson.py                Lesson (all paths of lessons/<id>/), slugify, listing
-  settings.py              per-video choices vs configuration; TTS options
-  script.py                script.json load/save, spoken pieces, page lists
-  validate.py              script validation, custom animation loading
-  pdf.py                   page analysis, header/footer detection, highlight resolution
-  app/                     the program
-    cli.py                 argument parsing and help
-    run.py                 Run: resolve → summary → prepare → plan → write → build; redo
-    commands.py            status, check, build, tts and the low-level tools
-    ui.py                  rich: colors, panels, live steps with progress bars
-    wizard.py              questionary: arrow-key menus
+  settings.py              per-video choices (style, depth, instructions, focus) vs configuration; TTS options
+  script.py                script.json v2: load/save, narration pieces, audio keys
+  validate.py              narration rules, scene code checks (AST allowlist), whole-script check
+  material/                ingestion: pdf.py (pages, L-numbered text lines, figures, chrome removal),
+                           text.py (.md/.txt sections), docx.py, image.py; __init__.py: index, refs, Material
+  app/                     cli.py, run.py (the workflow), commands.py, ui.py (rich), wizard.py (questionary),
+                           configure.py (./lezio config, tomlkit)
   agent/
-    tasks.py               the three tasks: data given to the model and the tools it may call
-    prompts/*.md           task texts ($placeholders), modes.toml (visual/depth rules)
-    prompts.py             loads and composes prompt texts
+    tasks.py               the three tasks, their tools, the scene API reference given to the model
+    prompts/               role.md, plan.md, write.md, review.md, rules/*.md, styles/*.md, depth.toml
+    prompts.py             loads and composes prompt texts ($placeholders)
     backends/              base.py (Task, Tool, ToolResult, Image), claude_subscription.py, anthropic_api.py
   voice/
     engines/               TTS engines (base.Engine with declared options): voxtral, edge
     synthesize.py          worker run in .venv-tts; prints JSON progress events
     client.py              runs the worker from .venv and relays its events
   video/
-    scene.py               Manim scene: one slide → one video (started by render.py)
+    scene_runner.py        Manim scene: one segment → runs scenes/<id>.py:build(scene, steps, material)
     manim_entry.py         file given to the manim CLI
-    templates.py           animation templates (signature + docstring are shown to the LLM)
-    anim_api.py            Timer/Steps (sync with audio), house style, helpers (public API of custom animations)
-    render.py              render slides/previews, contact sheets, fingerprints, final join
-lessons/<id>/              lesson.json, script.json, animations/*.py, build/ (cache, gitignored)
-input/  output/            PDFs in, videos out
+    render.py              previews, final renders, step sheets, fingerprints, final join
+  scene/                   PUBLIC helper library of scene code (`from lezio.scene import *`):
+                           sync.py (Steps/Timer), style.py (colors, fonts, themes, T, box...),
+                           material.py (material.page/figure, page.mark), layouts.py (optional layouts)
+lessons/<id>/              lesson.json, script.json, scenes/*.py, build/ (cache, gitignored)
+archive/slide-reader/      old slide-reader lessons (not loaded)
+input/  output/            material in, videos out (both gitignored)
 ```
+
+## Concepts
+
+- **Refs** address the material: `slides.pdf#p3` (page), `slides.pdf#p3-5`, `slides.pdf#p3.f1` (figure),
+  `notes.md#s2` (section), `diagram.png` (picture source). Source ids are slugs of the file names.
+- **Segments**: a lesson is an ordered list of segments (`s01`, `s02`, ...): plan data (title, goal,
+  sources, minutes, visual idea, `style` when the lesson style is `auto`), narration pieces (one audio file
+  each, key `<segment>_<piece>`), and a scene file `scenes/<id>.py` defining `build(scene, steps, material)`.
+- **Scene contract**: `build` calls `steps()` once per narration piece; the Timer it returns holds the
+  speech time of that piece (`t.play`, `t.wait`, `t.until`). The runner checks the code first, then
+  reports per piece: start/end times, texts cut off or overlapping, animations longer than the speech.
+- **Step sheets** (`build/qa/preview_<id>.png`, `final_<id>.png`): for every piece, the frame in its
+  middle and at its end. They are what the agent looks at when writing and reviewing.
 
 ## Conventions
 
-- Code, files, docs: English. Narration and on-screen animation texts: the lesson language (Italian by
-  default); never hard-code them in the program.
-- Two kinds of settings, never mixed: per-video choices (pages, visual, depth, instructions, skip) come
-  from the wizard/CLI and are saved in `lessons/<id>/script.json` (`settings.LESSON_CHOICES`);
-  configuration (TTS, language, LLM, video, `[tuning]`) lives only in `config.toml` and has no CLI flags.
-- Two virtual environments: `.venv` (program, Manim, PyMuPDF, Claude Agent SDK, rich, questionary) and
-  `.venv-tts` (MLX, TTS engines). `config.py`, `lesson.py`, `settings.py`, `script.py` and
-  `voice/engines/*` are imported by both: keep their module level free of heavy imports.
+- Code, files, docs: English. Narration and on-screen texts: the lesson language (Italian by default);
+  never hard-code them in the program.
+- Two kinds of settings, never mixed: per-video choices (style, depth, instructions, focus) come from the
+  wizard/CLI and are saved in `lessons/<id>/script.json` (`settings.LESSON_CHOICES`); the sources are in
+  `lesson.json`; configuration (TTS, language, LLM, video, `[tuning]`) lives only in `config.toml` and has
+  no CLI flags (`./lezio config` edits the file).
+- Two virtual environments: `.venv` (program, Manim, PyMuPDF, python-docx, Claude Agent SDK, rich,
+  questionary, tomlkit) and `.venv-tts` (MLX, TTS engines). `config.py`, `lesson.py`, `settings.py`,
+  `script.py` and `voice/engines/*` are imported by both: keep their module level free of heavy imports.
 - The LLM has no files, shell or web. Anything it needs is in the task message or behind a tool; anything
   it produces goes through a tool that validates it. Prompt texts belong in `agent/prompts/`, not in code.
-- Console output goes through `app/ui.py`; detailed output of subprocesses goes to `lessons/<id>/build/logs/`.
-- A slide video is re-rendered when its fingerprint changes (script entry, audio durations, video code,
-  animation files): `video/render.fingerprint`. Audio is regenerated when text or TTS options change.
+- Scene code is untrusted: `validate.check_scene_code` (imports allowlist, forbidden names/attributes)
+  runs before every render, renders have a timeout, the runner's cwd is the render's media directory.
+- Console output goes through `app/ui.py` (escape user text with `ui.escape`); detailed output of
+  subprocesses goes to `lessons/<id>/build/logs/`.
+- A segment video is re-rendered when its fingerprint changes (segment entry, audio durations, scene file,
+  `lezio.scene` + runner code, material, video settings): `video/render.fingerprint`. Audio is regenerated
+  when text or TTS options change.
 - Temporary render files (`build/media/`) are deleted as soon as a render is copied out.
-- Custom animations import `from slidereader.video.anim_api import *`: keep that module's API stable.
+- Scene files import `from lezio.scene import *`: keep that API stable (it is also what
+  `agent.tasks.scene_api()` shows the model, generated from signatures and docstrings).
 
 ## How to extend
+
+**Material reader** — `material/<kind>.py` with `ingest(path, source_id, out_dir, rel) -> entry` (items
+with `ref`, text, `image`/`preview` paths, `figures`); register the extensions in `material.KINDS` and the
+reader in `material._reader`; bump `material.VERSION` when readers change (sources are read again).
+
+**Style** — `agent/prompts/styles/<name>.md`, add it to `settings.STYLES` (and `SEGMENT_STYLES` if `auto`
+may choose it); a default theme can be mapped in `video/scene_runner.STYLE_THEME`.
+
+**Scene helper** — a function in `lezio/scene/*.py` exported by `scene/__init__.py`, with a docstring
+written for the model, and listed in `agent.tasks.scene_api()`. Layouts: `@layout` functions
+`(scene, steps, ...)` in `layouts.py`, registered in `LAYOUTS`.
 
 **TTS engine** — `voice/engines/<name>.py`: subclass `Engine`, declare `options`
 (`Option(default, help, choices, minimum, maximum)`), implement `prepare`, `synthesize(text, opts) ->
@@ -93,31 +124,30 @@ input/  output/            PDFs in, videos out
 call (results: text and `Image`), stops when a result has `done=True`, reports through
 `task.on_event`. Register in `agent/backends/__init__.py`.
 
-**Animation template** — function `(scene, steps, **args)` in `video/templates.py`, using `run_phases`;
-register in `TEMPLATES`. Its signature and docstring are what the LLM reads.
-
 **Task behaviour** — texts in `agent/prompts/`, tools in `agent/tasks.py`, validation in `validate.py`,
 order of tasks and retries in `app/run.py`.
 
 ## Testing
 
 ```bash
-.venv/bin/python -m py_compile $(find slidereader -name "*.py")
-./sr check b1-rappresentazione-informazione          # example lessons must stay valid
-./sr anim b1-rappresentazione-informazione --all      # templates + custom animations render (build/qa)
-./sr tts --try "Prova" --engine edge                  # TTS engines
-./sr build b1-test                                    # voice/render/join without LLM calls
+.venv/bin/python -m py_compile $(find src -name "*.py")
+./lezio check <lesson>                             # narration, scene code, refs
+./lezio render <lesson> --segments s01 --preview   # step sheet in build/qa (estimated timing if no voice)
+./lezio scene-api                                  # the helper reference the model sees
+./lezio tts --try "Prova" --engine edge            # TTS engines
+./lezio build <lesson>                             # voice/render/join without LLM calls
 ```
 
-LLM tasks use the user's Claude subscription: test them on a few slides (`./sr redo b1-test --slides 26`)
-and read `lessons/<id>/build/agent/log.jsonl` (prompts, tool calls, tool results).
+LLM tasks use the user's Claude subscription: test them on small material first (e.g. a few PDF pages
+with `--focus`) and read `lessons/<id>/build/agent/log.jsonl` (prompts, tool calls, tool results).
 
 ## Known pitfalls
 
 - Manim loads scene files outside any package: `manim_entry.py` subclasses the scene so it is detected.
 - Parallel renders need separate `--media_dir`s.
-- Manim `Text` does not wrap; LaTeX is not installed (no `MathTex`).
+- Manim `Text` does not wrap; LaTeX is not installed (no `MathTex`): formulas with Unicode or MarkupText.
 - pydub/Manim need `ffmpeg` on PATH: `setup.sh` links the imageio-ffmpeg binary into `.venv/bin`.
-- Rich markup: escape user/config text containing `[...]` (`rich.markup.escape`).
+- Rich markup: escape user/config text containing `[...]` (`ui.escape`).
 - Claude Agent SDK: isolation via `tools=[]`, `setting_sources=[]`, `strict_mcp_config=True`; images in
   tool results are compressed (`Image.from_file`) and `max_buffer_size` is raised.
+- The package lives in `src/lezio/` because the wrapper `./lezio` and a `lezio/` folder cannot share a name.
