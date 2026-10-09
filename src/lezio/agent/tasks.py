@@ -1,240 +1,441 @@
 """The agent tasks: what the model receives and the tools through which it works.
 
-Texts live in agent/prompts/; this module assembles them with the task data and defines the tools.
-Every tool validates what the model submits and answers "accepted" or with the list of problems, so
-mistakes are fixed inside the same session. The model never touches files.
+    plan     the material in scope -> title, outline, ordered segments (sources, goal, length, style)
+    write    one or a few segments -> narration + scene code, each submission checked and previewed
+    review   final frames of rendered segments -> fixes
+
+Texts live in agent/prompts/; this module assembles them with the task data and defines the tools. Every
+tool validates what the model submits and answers "accepted" or with the problems, so mistakes are fixed
+inside the same session. The model never touches files: the program saves what is accepted.
+
+A task works on a `work` object with: lesson, script (dict, saved by the tools), material (Material),
+plan_key, on_event(kind, data) (agent activity for the UI).
 """
-import ast
 import inspect
 import json
+import time
 
 from ..config import CONFIG
-from ..settings import DEPTHS
-from ..validate import validate
+from ..material import RefError
+from ..script import find_segment, normalize_piece, save_script
+from ..settings import DEPTHS, SEGMENT_STYLES, segment_style
+from ..validate import check_narration, check_scene_code
 from . import prompts
 from .backends import Image, Task, Tool, ToolResult, task_options
 
-KINDS = ("title", "agenda", "divider", "content", "diagram", "interactive", "references", "other")
 ARRAY_OF_OBJECTS = {"type": "array", "items": {"type": "object"}}
+MAX_VIEW = 6
 
 
-def templates_reference():
-    """Signature and docstring of every animation template (what the model knows about templates)."""
-    from ..video import templates
-    out = []
-    for name, fn in templates.TEMPLATES.items():
-        sig = str(inspect.signature(fn)).replace("(scene, steps, ", "(")
-        out.append(f"- {name}{sig}\n    " + inspect.getdoc(fn).replace("\n", "\n    "))
-    return "\n".join(out)
-
-
-def settings_block(run):
-    s = run.settings
-    block = (f"Lesson: {run.lesson.id}  (PDF: {run.lesson.pdf.name})\n"
-             f"Narration language: {s['language']}\n"
-             f"Visual mode: {s['visual']} - {prompts.visual_rule(s['visual'])}\n"
+# ======================================================================== shared pieces
+def settings_block(work, style=None):
+    s = work.script["settings"]
+    style = style or s["style"]
+    block = (f"Lesson: {work.lesson.id}\nNarration language: {s['language']}\n"
+             f"Style: {style} - {prompts.style_rule(style)}\n"
              f"Depth: {s['depth']} ({DEPTHS[s['depth']]}) - {prompts.depth_rule(s['depth'])}")
+    if s["style"] == "auto" and style != "auto":
+        block += "\n(The lesson style is auto: this style was chosen for this segment in the plan.)"
     if s.get("instructions"):
         block += "\n\nINSTRUCTIONS FROM THE USER (priority over the default rules):\n" + \
                  "\n".join(f"- {line}" for line in s["instructions"].splitlines() if line.strip())
     return block
 
 
-def slide_text(run, n):
-    data = run.lines["slides"][str(n)]
-    w, h = run.lines["page_size"]
-    rows = [f"L{k}: {r['text']}" for k, r in enumerate(data["lines"], 1)] or ["(no text lines)"]
-    rows += [f"image #{k}: {(b[2] - b[0]) * (b[3] - b[1]) / (w * h):.0%} of the slide"
-             for k, b in enumerate(data["images"], 1)]
-    return "\n".join(rows)
+def make_task(work, kind, label, system, prompt, tools, max_turns):
+    return Task(label, system, prompt, tools, max_turns=max_turns, log_path=work.lesson.agent / "log.jsonl",
+                on_event=work.on_event, **task_options(kind))
 
 
-def make_task(run, kind, label, system, prompt, tools, max_turns):
-    return Task(label, system, prompt, tools, max_turns=max_turns, log_path=run.lesson.agent / "log.jsonl",
-                on_event=run.on_agent_event, **task_options(kind))
+def rejected(problems, intro="Rejected:"):
+    return ToolResult([intro] + [f"- {p}" for p in problems[:40]], error=True)
 
 
-def view_slides_tool(run, allowed):
-    def handler(args):
-        numbers = args.get("numbers") or []
-        if not numbers or any(n not in allowed for n in numbers):
-            return ToolResult([f"Choose pages among {allowed}."], error=True)
-        content = []
-        for n in numbers[:6]:
-            content += [f"Slide {n}:", Image.from_file(run.lesson.preview / f"slide_{n:02d}.jpg")]
-        if len(numbers) > 6:
-            content.append("Only the first 6 are shown; ask for the others in another call.")
-        return ToolResult(content)
-    return Tool("view_slides", "Show the pictures of some slides (up to 6 per call). Look at every slide you "
-                "work on: many slides are pictures, diagrams or tables.",
-                {"type": "object", "properties": {"numbers": {"type": "array", "items": {"type": "integer"}}},
-                 "required": ["numbers"]}, handler)
+def material_tools(work):
+    """read, view, list_material: the model's only access to the study material."""
+    m = work.material
+
+    def read(args):
+        try:
+            return ToolResult([m.read(args.get("ref", ""))])
+        except RefError as e:
+            return ToolResult([str(e)], error=True)
+
+    def view(args):
+        refs = args.get("refs") or []
+        if isinstance(refs, str):
+            refs = [refs]
+        content, shown = [], 0
+        for ref in refs:
+            try:
+                pics = m.pictures(ref)
+            except RefError as e:
+                return ToolResult([str(e)], error=True)
+            if not pics:
+                content.append(f"{ref}: nothing to see (text only).")
+            for label, path in pics:
+                if shown == MAX_VIEW:
+                    content.append(f"Only {MAX_VIEW} pictures per call: ask for the others in another call.")
+                    return ToolResult(content)
+                content += [f"{label}:", Image.from_file(path, max_width=1024)]
+                shown += 1
+        return ToolResult(content or ["Give some refs."])
+
+    def list_material(args):
+        return ToolResult([m.overview(work.script["settings"].get("focus"))])
+
+    return [
+        Tool("read", "Text of the material: a page or section (with its L-numbered lines and figures), a range "
+             "(slides.pdf#p3-5) or a whole source.",
+             {"type": "object", "properties": {"ref": {"type": "string"}}, "required": ["ref"]}, read),
+        Tool("view", f"Pictures of pages, figures and picture sources (up to {MAX_VIEW} per call).",
+             {"type": "object", "properties": {"refs": {"type": "array", "items": {"type": "string"}}},
+              "required": ["refs"]}, view),
+        Tool("list_material", "The list of the material in scope (one line per page, section or picture).",
+             {"type": "object", "properties": {}}, list_material),
+    ]
 
 
-def must_fix(errors, warnings):
-    return errors + [w for w in warnings if "digits" in w or "words" in w]
+# ======================================================================== scene API reference
+def _signature(fn, skip=0):
+    params = list(inspect.signature(fn).parameters.values())[skip:]
+    return "(" + ", ".join(str(p) for p in params) + ")"
+
+
+def _doc(obj, indent="    "):
+    doc = inspect.getdoc(obj) or ""
+    return ("\n" + indent + doc.replace("\n", "\n" + indent)) if doc else ""
+
+
+def scene_api():
+    """Reference of the helpers available to scene code, generated from lezio.scene (what the model knows)."""
+    from ..scene import layouts, material, style, sync
+    out = ["Narration sync - t = steps() starts the next piece and returns its Timer t:"]
+    for name in ("play", "wait", "until", "finish", "clear"):
+        out.append(f"  t.{name}{_signature(getattr(sync.Timer, name), 1)}{_doc(getattr(sync.Timer, name))}")
+    out.append("  t.duration, t.left, t.pause, t.say, t.index: speech length, speech left, silence after, text, number")
+    out.append(f"  steps.take{_signature(sync.Steps.take, 1)}{_doc(sync.Steps.take)}")
+    out.append("  steps.left: pieces not started yet")
+    out.append("\nStudy material - `material`:")
+    for name in ("page", "figure", "text", "lines"):
+        fn = getattr(material.SceneMaterial, name)
+        out.append(f"  material.{name}{_signature(fn, 1)}{_doc(fn)}")
+    for name in ("mark", "point"):
+        fn = getattr(material.Page, name)
+        out.append(f"  page.{name}{_signature(fn, 1)}{_doc(fn)}")
+    out.append("\nStyle:")
+    out.append("  colors: BLUE, BLUE_LIGHT, ORANGE, ORANGE_LIGHT, GREEN, GREEN_LIGHT, YELLOW, YELLOW_LIGHT, RED, "
+               "RED_LIGHT, DARK, GREY, GREY_LIGHT; chalk: CHALK, CHALK_YELLOW, CHALK_BLUE, CHALK_PINK, CHALK_GREEN")
+    out.append("  fonts: FONT (sans), MONO, HAND (handwriting)   frame: FRAME_WIDTH, FRAME_HEIGHT, SAFE_LEFT, "
+               "SAFE_RIGHT, SAFE_BOTTOM, SAFE_TOP")
+    for name in ("theme", "ink", "T", "MT", "wrap", "fit", "box", "arrow", "person", "check", "cross"):
+        fn = getattr(style, name)
+        out.append(f"  {name}{_signature(fn)}{_doc(fn)}")
+    out.append("\nLayouts (optional) - " + (inspect.getdoc(layouts) or "").split("\n\n")[1].replace("\n", " "))
+    for name, fn in layouts.LAYOUTS.items():
+        out.append(f"  {name}{_signature(fn)}{_doc(fn)}")
+    return "\n".join(out)
 
 
 # ======================================================================== plan
-def plan_task(run):
-    scope = run.scope
-    lines = [f"Slide {n}: " + " | ".join(r["text"] for r in run.lines["slides"][str(n)]["lines"]) for n in scope]
-    prompt = (settings_block(run) + f"\n\nPages in scope: {scope[0]}-{scope[-1]} ({len(scope)} pages)\n\n"
-              "Text of the slides (repeated headers/footers removed):\n" + "\n".join(lines))
+def plan_task(work):
+    s = work.script["settings"]
+    focus = s.get("focus") or {}
+    scope = work.material.scope(focus)
+    auto = s["style"] == "auto"
+    style_field = (', "style": one of ' + " | ".join(SEGMENT_STYLES)) if auto else ""
+    system = prompts.compose("role", "plan", style_field=style_field)
+    prompt = settings_block(work)
+    if auto:
+        prompt += "\n\nThe styles to choose from:\n" + "\n".join(f"- {prompts.style_rule(x)}" for x in SEGMENT_STYLES)
+    prompt += "\n\nMATERIAL IN SCOPE (refs, first line or heading, size):\n" + work.material.overview(focus)
 
     def submit(args):
-        items = args.get("slides")
-        if not isinstance(items, list):
-            return ToolResult(["slides must be a list"], error=True)
         problems = []
-        numbers = [i.get("slide") for i in items if isinstance(i, dict)]
-        if numbers != scope:
-            problems.append(f"slides must be exactly the pages {scope} in order (got {numbers})")
-        for i in items:
-            if isinstance(i, dict) and i.get("kind") not in KINDS:
-                problems.append(f"slide {i.get('slide')}: kind must be one of {KINDS}")
-            if isinstance(i, dict) and not isinstance(i.get("skip"), bool):
-                problems.append(f"slide {i.get('slide')}: skip must be true or false")
-        if not str(args.get("outline", "")).strip():
+        title, outline = str(args.get("title", "")).strip(), str(args.get("outline", "")).strip()
+        segments, skipped = args.get("segments"), args.get("skipped") or []
+        if not title:
+            problems.append("title is empty")
+        if not outline:
             problems.append("outline is empty")
-        if problems:
-            return ToolResult(["Plan rejected:"] + [f"- {p}" for p in problems], error=True)
-        run.save_plan({"title": args.get("title", ""), "outline": args["outline"], "slides": items})
-        return ToolResult(["Plan accepted. The task is complete."], done=True)
-
-    tools = [view_slides_tool(run, scope),
-             Tool("submit_plan", "Submit the lesson plan (validated by the program).",
-                  {"type": "object", "properties": {"title": {"type": "string"}, "outline": {"type": "string"},
-                                                    "slides": ARRAY_OF_OBJECTS},
-                   "required": ["title", "outline", "slides"]}, submit)]
-    return make_task(run, "plan", "plan", prompts.compose("role", "plan"), prompt, tools, max_turns=30)
-
-
-# ======================================================================== write a group of slides
-def write_task(run, items, outline, before, after, note=""):
-    numbers = [i["slide"] for i in items]
-    first = numbers[0]
-    group_file = run.lesson.agent / f"group_{first:03d}.json"
-    anim_file = run.lesson.animations_dir / f"group_{first:03d}.py"
-    prefix = f"g{first:03d}_"
-    rounds = CONFIG["tuning"]["animation_rounds"]
-    state = {"accepted": False, "previews": 0, "previewed": False, "has_anims": False}
-
-    system = prompts.compose("role", "write", "script_format", "writing_rules", "animations",
-                             templates=templates_reference(), prefix=prefix)
-    blocks = [f"### Slide {i['slide']} ({i['kind']})\nPlan: {i.get('summary', '')}  |  "
-              f"Visual idea: {i.get('visual_idea', 'none')}\n{slide_text(run, i['slide'])}" for i in items]
-    prompt = (settings_block(run) + f"\n\nLesson outline: {outline}\n\n"
-              f"Write the script of slides {numbers}. Custom animation functions must start with \"{prefix}\".\n"
-              f"Context: {before}\n{after}\n"
-              + (f"\nRequest from the user for these slides: {note}\n" if note else "")
-              + "\n" + "\n\n".join(blocks))
-
-    def submit(args):
-        slides = args.get("slides")
-        if not isinstance(slides, list):
-            return ToolResult(["slides must be a list of slide entries"], error=True)
-        got = [s.get("slide") for s in slides if isinstance(s, dict)]
-        problems = [] if got == numbers else [f"slides must be exactly {numbers} in this order (got {got})"]
-        code = (args.get("animation_code") or "").strip()
-        if code:
+        if not isinstance(segments, list) or not segments:
+            return rejected(problems + ["segments must be a non-empty list"])
+        covered, out = set(), []
+        for k, seg in enumerate(segments, 1):
+            where = f"segment {k}"
+            if not isinstance(seg, dict):
+                problems.append(f"{where}: must be an object")
+                continue
+            for key in ("title", "goal", "visual"):
+                if not str(seg.get(key, "")).strip():
+                    problems.append(f"{where}: \"{key}\" is empty")
+            minutes = seg.get("minutes")
+            if not isinstance(minutes, (int, float)) or isinstance(minutes, bool) or not 0 < minutes <= 15:
+                problems.append(f"{where}: \"minutes\" must be a number between 0 and 15")
+            refs = seg.get("sources")
+            if not isinstance(refs, list) or not refs:
+                problems.append(f"{where}: \"sources\" must be a non-empty list of refs")
+                refs = []
+            for ref in refs:
+                try:
+                    items = work.material.expand([ref])
+                except RefError as e:
+                    problems.append(f"{where}: {e}")
+                    continue
+                outside = [i for i in items if i not in scope]
+                if outside:
+                    problems.append(f"{where}: {ref} is outside the scope of the lesson")
+                covered.update(items)
+            entry = {"title": str(seg.get("title", "")).strip(), "goal": str(seg.get("goal", "")).strip(),
+                     "sources": refs, "minutes": minutes, "visual": str(seg.get("visual", "")).strip()}
+            if auto:
+                if seg.get("style") not in SEGMENT_STYLES:
+                    problems.append(f"{where}: \"style\" must be one of {', '.join(SEGMENT_STYLES)}")
+                entry["style"] = seg.get("style")
+            out.append(entry)
+        skipped_items, skipped_out = set(), []
+        for x in skipped:
+            ref = x.get("ref") if isinstance(x, dict) else x
             try:
-                names = [f.name for f in ast.parse(code).body if isinstance(f, ast.FunctionDef)]
-                problems += [f"animation_code: function {f} must start with {prefix}" for f in names
-                             if not f.startswith(prefix) and not f.startswith("_")]
-            except SyntaxError as e:
-                problems.append(f"animation_code: syntax error at line {e.lineno}: {e.msg}")
+                skipped_items.update(work.material.expand([ref]))
+                skipped_out.append({"ref": ref, "reason": str(x.get("reason", "")) if isinstance(x, dict) else ""})
+            except RefError as e:
+                problems.append(f"skipped: {e}")
+        missing = [r for r in scope if r not in covered and r not in skipped_items]
+        if missing:
+            problems.append("not covered by any segment and not in skipped: " + ", ".join(missing[:30]))
         if problems:
-            return ToolResult(["Rejected:"] + [f"- {p}" for p in problems], error=True)
-        if code:
-            anim_file.write_text(code + "\n")
-        else:
-            anim_file.unlink(missing_ok=True)
-        problems = must_fix(*validate(run.lesson, run.settings, slides, coverage=False))
-        if problems:
-            return ToolResult(["Rejected:"] + [f"- {p}" for p in problems[:40]], error=True)
-        group_file.write_text(json.dumps({"slides": slides}, ensure_ascii=False, indent=2))
-        run.take_group(group_file)
-        state.update(accepted=True, previewed=False, has_anims=any("anim" in b for s in slides for b in s["beats"]))
-        if state["has_anims"]:
-            return ToolResult(["Script accepted. Now call preview_animations and check the frames."])
-        return ToolResult(["Script accepted (no animations). The task is complete."], done=True)
+            return rejected(problems, "Plan rejected:")
+        for k, entry in enumerate(out, 1):
+            entry["id"] = f"s{k:02d}"
+        work.script.update(title=title, outline=outline, plan_key=work.plan_key, skipped=skipped_out,
+                           segments=[{"id": e.pop("id"), **e} for e in out])
+        save_script(work.lesson.script, work.script)
+        return ToolResult([f"Plan accepted ({len(out)} segments). The task is complete."], done=True)
 
-    def preview(args):
-        if not state["accepted"]:
-            return ToolResult(["Submit an accepted script first."], error=True)
-        if state["previews"] >= rounds:
-            return ToolResult([f"Preview limit ({rounds}) reached: call finish."], error=True)
-        state["previews"] += 1
-        from ..video.render import render_animation_previews
-        beats = [(n, k) for n in numbers for k, b in enumerate(run.slides[n]["beats"]) if "anim" in b]
-        content = ["Frames of each animation in time order (left to right, top to bottom); timing is a "
-                   "placeholder until the voice exists."]
-        for n, k, sheet, err in render_animation_previews(run.lesson, beats):
-            content.append(f"Slide {n}, beat {k} ({run.slides[n]['beats'][k]['anim']}):")
-            content.append(f"RENDER FAILED: {err}" if err else Image.from_file(sheet, max_width=1440, quality=78))
-        state["previewed"] = True
+    tools = material_tools(work) + [
+        Tool("submit_plan", "Submit the lesson plan (checked by the program).",
+             {"type": "object", "properties": {"title": {"type": "string"}, "outline": {"type": "string"},
+                                               "segments": ARRAY_OF_OBJECTS, "skipped": ARRAY_OF_OBJECTS},
+              "required": ["title", "outline", "segments"]}, submit)]
+    return make_task(work, "plan", "plan", system, prompt, tools, max_turns=60)
+
+
+# ======================================================================== write and fix segments
+def numbered(narration):
+    rows = []
+    for i, p in enumerate(normalize_piece(x) for x in narration or []):
+        rows.append(f"  {i}. {p['say']}" + (f"  [pause {p['pause']} s]" if p["pause"] else ""))
+    return "\n".join(rows)
+
+
+def segment_brief(work, seg, with_text=True):
+    s = work.script["settings"]
+    lines = [f"### Segment {seg['id']}: {seg['title']}",
+             f"Goal: {seg.get('goal', '')}",
+             f"Length: about {seg.get('minutes', '?')} minutes · style: {segment_style(s, seg)}",
+             f"Visual idea from the plan: {seg.get('visual', '')}",
+             f"Sources: {', '.join(seg.get('sources', []))}"]
+    if with_text:
+        texts = []
+        for ref in seg.get("sources", []):
+            try:
+                texts.append(work.material.read(ref, limit=12000))
+            except RefError as e:
+                texts.append(f"{ref}: {e}")
+        lines.append("Text of the sources:\n" + "\n\n".join(texts))
+    return "\n".join(lines)
+
+
+class SegmentSubmissions:
+    """Checks a submission, renders its preview and saves it when it renders: shared by write and review."""
+
+    def __init__(self, work, ids, rounds):
+        self.work, self.ids, self.rounds = work, ids, rounds
+        self.renders = {sid: 0 for sid in ids}
+        self.accepted = {sid: False for sid in ids}
+
+    def submit(self, sid, narration, code, next_hint):
+        from ..video import render
+        work = self.work
+        if sid not in self.ids:
+            return ToolResult([f"Choose a segment among {', '.join(self.ids)}."], error=True)
+        if self.renders[sid] >= self.rounds:
+            return ToolResult([f"No submissions left for {sid}: {next_hint}"], error=True)
+        errors, warnings = check_narration(narration)
+        if not isinstance(code, str) or not code.strip():
+            errors.append("code is empty")
+        else:
+            errors += [f"code: {p}" for p in check_scene_code(code)]
+        if errors:
+            return rejected(errors)
+        self.renders[sid] += 1
+        left = self.rounds - self.renders[sid]
+        seg = find_segment(work.script, sid)
+        candidate = {**seg, "narration": narration, "scene": sid}
+        try:
+            sheet, report = render.preview(work.lesson, candidate, code)
+        except render.RenderError as e:
+            report = e.report or {}
+            return ToolResult([f"The scene failed while rendering: {e}"]
+                              + [f"warning: {w}" for w in report.get("warnings", [])[:8]]
+                              + [f"Fix it and submit again ({left} submissions left for {sid})."
+                                 if left else f"No submissions left for {sid}."], error=True)
+        seg.update(narration=narration, scene=sid)
+        work.lesson.scenes.mkdir(parents=True, exist_ok=True)
+        work.lesson.scene_file(sid).write_text(code.rstrip() + "\n")
+        save_script(work.lesson.script, work.script)
+        self.accepted[sid] = True
+        notes = warnings + report.get("warnings", [])
+        content = [f"Segment {sid} accepted and saved. Preview: {report.get('seconds', '?')} s with estimated "
+                   "timing; for every piece, the frame in its middle and the frame at its end:"]
+        if sheet:
+            content.append(Image.from_file(sheet, max_width=1440, quality=78))
+        content += [f"warning: {w}" for w in notes[:12]]
+        content.append(f"Check the frames. If something is wrong, fix it and submit again ({left} submissions left "
+                       f"for {sid}); otherwise {next_hint}" if left else f"No submissions left for {sid}: {next_hint}")
         return ToolResult(content)
 
+    def pending(self):
+        return [sid for sid in self.ids if not self.accepted[sid] and self.renders[sid] < self.rounds]
+
+
+def frame_tool(work, ids, final):
+    """view_frame: one frame at full size, to check details the step sheet is too small to show."""
+    def handler(args):
+        from ..video import render
+        sid, piece, where = args.get("id"), args.get("piece"), args.get("where", "end")
+        if sid not in ids or not isinstance(piece, int) or where not in ("middle", "end"):
+            return ToolResult([f"Give id (one of {', '.join(ids)}), piece (a number) and where (middle | end)."],
+                              error=True)
+        try:
+            path = render.piece_frame(work.lesson, sid, piece, final, where)
+        except render.RenderError as e:
+            return ToolResult([str(e)], error=True)
+        return ToolResult([f"{sid}, piece {piece}, {where} ({'final video' if final else 'last preview'}):",
+                           Image.from_file(path, max_width=1280, quality=80)])
+    return Tool("view_frame", "One frame of the " + ("final video" if final else "last preview") + " of a segment "
+                "at full size (the middle or the end of a narration piece): to check small text and details.",
+                {"type": "object", "properties": {"id": {"type": "string"}, "piece": {"type": "integer"},
+                                                  "where": {"type": "string", "enum": ["middle", "end"]}},
+                 "required": ["id", "piece"]}, handler)
+
+
+def write_task(work, ids, note=""):
+    script, s = work.script, work.script["settings"]
+    segs = [find_segment(script, sid) for sid in ids]
+    order = [x["id"] for x in script["segments"]]
+    first, last = order.index(ids[0]), order.index(ids[-1])
+    styles = sorted({segment_style(s, seg) for seg in segs})
+    system = prompts.compose("role", "write", "rules/writing", "rules/narration_format", "rules/scene_api",
+                             api=scene_api())
+    prompt = settings_block(work, styles[0] if len(styles) == 1 else None)
+    if len(styles) > 1:
+        prompt += "\nStyles of these segments:\n" + "\n".join(f"- {prompts.style_rule(x)}" for x in styles)
+    plan = "\n".join(f"  {x['id']}  {x['title']}" + ("   <- write now" if x["id"] in ids else "")
+                     + (f"  [{segment_style(s, x)}]" if s["style"] == "auto" else "") for x in script["segments"])
+    prompt += f"\n\nLESSON: {script['title']}\n{script['outline']}\nSegments:\n{plan}\n"
+    if first == 0:
+        prompt += "\nThe first segment to write opens the lesson: welcome the viewer and say what the lesson is about."
+    else:
+        prev = script["segments"][first - 1]
+        said = " ".join(normalize_piece(p)["say"] for p in (prev.get("narration") or [])[-2:])
+        prompt += (f"\nThe previous segment ({prev['id']}, {prev['title']}) ends with: \"{said[-400:]}\" - continue "
+                   "naturally, do not welcome again." if said else
+                   f"\nThe previous segment is {prev['id']} ({prev['title']}): continue naturally, do not welcome again.")
+    if last == len(order) - 1:
+        prompt += "\nThe last segment to write closes the lesson: end it with a short recap."
+    if note:
+        prompt += f"\n\nREQUEST FROM THE USER FOR THESE SEGMENTS: {note}"
+    prompt += "\n\n" + "\n\n".join(segment_brief(work, seg) for seg in segs)
+
+    subs = SegmentSubmissions(work, ids, CONFIG["tuning"]["preview_rounds"])
+
+    def submit(args):
+        sid = args.get("id")
+        rest = [x for x in ids if x != sid and not subs.accepted.get(x)]
+        hint = f"go on with segment {rest[0]}." if rest else "call finish."
+        return subs.submit(sid, args.get("narration"), args.get("code"), hint)
+
     def finish(args):
-        if not state["accepted"]:
-            return ToolResult(["Submit an accepted script first."], error=True)
-        if state["has_anims"] and not state["previewed"] and state["previews"] < rounds:
-            return ToolResult(["Preview the animations of the last accepted script first."], error=True)
-        (run.lesson.agent / f"group_{first:03d}_notes.txt").write_text(args.get("notes", ""))
+        pending = subs.pending()
+        if pending:
+            return ToolResult([f"Segment {pending[0]} is not accepted yet: submit it."], error=True)
+        notes = work.lesson.agent / "notes.jsonl"
+        with open(notes, "a") as fh:
+            fh.write(json.dumps({"t": time.strftime("%Y-%m-%d %H:%M"), "task": f"write {','.join(ids)}",
+                                 "notes": args.get("notes", "")}, ensure_ascii=False) + "\n")
         return ToolResult(["Done."], done=True)
 
-    tools = [
-        view_slides_tool(run, run.scope),
-        Tool("submit_script", "Submit the script of the group (validated by the program). animation_code: Python "
-             "source of the custom animations used by the script (omit if none).",
-             {"type": "object", "properties": {"slides": ARRAY_OF_OBJECTS, "animation_code": {"type": "string"}},
-              "required": ["slides"]}, submit),
-        Tool("preview_animations", "Render every animation of the accepted script alone and show their frames.",
-             {"type": "object", "properties": {}}, preview),
-        Tool("finish", "Finish the task.", {"type": "object", "properties": {"notes": {"type": "string"}}}, finish),
+    tools = material_tools(work) + [
+        frame_tool(work, ids, final=False),
+        Tool("submit_segment", "Submit the narration and scene code of one segment: checked, rendered as a "
+             "low-resolution preview and saved if it renders. You get the frames back.",
+             {"type": "object", "properties": {
+                 "id": {"type": "string"},
+                 "narration": {"type": "array", "items": {"anyOf": [{"type": "string"}, {"type": "object"}]}},
+                 "code": {"type": "string"}}, "required": ["id", "narration", "code"]}, submit),
+        Tool("finish", "Finish the task (when every segment is accepted).",
+             {"type": "object", "properties": {"notes": {"type": "string"}}}, finish),
     ]
-    return make_task(run, "write", f"write slides {numbers}", system, prompt, tools, max_turns=60)
+    return make_task(work, "write", f"write {', '.join(ids)}", system, prompt, tools, max_turns=80), subs
 
 
 # ======================================================================== review
-def review_task(run, numbers):
+def review_task(work, ids):
+    script = work.script
+    segs = [find_segment(script, sid) for sid in ids]
+    system = prompts.compose("role", "review", "rules/writing", "rules/narration_format", "rules/scene_api",
+                             api=scene_api())
+    blocks = []
+    for seg in segs:
+        code = work.lesson.scene_file(seg["id"]).read_text()
+        blocks.append(segment_brief(work, seg, with_text=False) + f"\nNarration:\n{numbered(seg['narration'])}"
+                      f"\nScene code:\n```python\n{code}\n```")
+    prompt = settings_block(work) + f"\n\nLESSON: {script['title']}\n\nReview the segments {', '.join(ids)}.\n\n" + \
+        "\n\n".join(blocks)
+    subs = SegmentSubmissions(work, ids, CONFIG["tuning"]["preview_rounds"])
     changed = []
-    system = prompts.compose("role", "review", "script_format") + "\n\nTEMPLATES:\n" + templates_reference()
-    blocks = [f"### Slide {n}\n{slide_text(run, n)}\nScript: {json.dumps(run.slides[n], ensure_ascii=False)}"
-              for n in numbers]
-    prompt = settings_block(run) + f"\n\nReview slides {numbers}.\n\n" + "\n\n".join(blocks)
 
     def view_final(args):
-        n = args.get("slide")
-        if n not in numbers:
-            return ToolResult([f"Choose a slide among {numbers}."], error=True)
-        sheet = run.lesson.qa / f"final_slide_{n:02d}.png"
-        return ToolResult([f"Final video of slide {n}:", Image.from_file(sheet, max_width=1440, quality=78)])
+        sid = args.get("id")
+        if sid not in ids:
+            return ToolResult([f"Choose a segment among {', '.join(ids)}."], error=True)
+        sheet = work.lesson.qa / f"final_{sid}.png"
+        meta = work.lesson.video / f"{sid}.json"
+        warnings = json.loads(meta.read_text()).get("warnings", []) if meta.exists() else []
+        content = [f"Final video of {sid}: for every piece, the frame in its middle and the frame at its end."]
+        content += [Image.from_file(sheet, max_width=1440, quality=78)] if sheet.exists() else ["(no frames)"]
+        content += [f"warning: {w}" for w in warnings[:12]] or ["No automatic warnings."]
+        return ToolResult(content)
 
     def replace(args):
-        entry = args.get("entry")
-        if not isinstance(entry, dict) or entry.get("slide") not in numbers:
-            return ToolResult([f"entry must be a slide entry of one of {numbers}"], error=True)
-        problems = must_fix(*validate(run.lesson, run.settings, [entry], coverage=False))
-        if problems:
-            return ToolResult(["Rejected:"] + [f"- {p}" for p in problems], error=True)
-        run.slides[entry["slide"]] = entry
-        run.save_script()
-        changed.append(entry["slide"])
-        return ToolResult([f"Slide {entry['slide']} replaced; it will be re-rendered."])
+        sid = args.get("id")
+        seg = find_segment(script, sid) if sid in ids else None
+        if seg is None:
+            return ToolResult([f"Choose a segment among {', '.join(ids)}."], error=True)
+        narration = args.get("narration") or seg["narration"]
+        code = args.get("code") or work.lesson.scene_file(sid).read_text()
+        result = subs.submit(sid, narration, code, "go on with the review or call finish.")
+        if not result.error and sid not in changed:
+            changed.append(sid)
+        return result
 
     def finish(args):
-        (run.lesson.agent / f"review_{numbers[0]:03d}.json").write_text(json.dumps(
+        (work.lesson.agent / f"review_{ids[0]}.json").write_text(json.dumps(
             {"changed": changed, "notes": args.get("notes", "")}, ensure_ascii=False, indent=2))
         return ToolResult(["Done."], done=True)
 
-    tools = [
-        Tool("view_final", "Show frames of the final video of one slide.",
-             {"type": "object", "properties": {"slide": {"type": "integer"}}, "required": ["slide"]}, view_final),
-        view_slides_tool(run, numbers),
-        Tool("replace_slide", "Replace the script entry of one slide (validated by the program).",
-             {"type": "object", "properties": {"entry": {"type": "object"}}, "required": ["entry"]}, replace),
+    tools = material_tools(work) + [
+        Tool("view_final", "Frames of the final video of one segment, with the automatic warnings.",
+             {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}, view_final),
+        frame_tool(work, ids, final=True),
+        Tool("replace_segment", "Replace the code and/or the narration of a segment (omitted = unchanged): "
+             "checked, previewed and saved like when writing it.",
+             {"type": "object", "properties": {
+                 "id": {"type": "string"},
+                 "narration": {"type": "array", "items": {"anyOf": [{"type": "string"}, {"type": "object"}]}},
+                 "code": {"type": "string"}}, "required": ["id"]}, replace),
         Tool("finish", "Finish the review.", {"type": "object", "properties": {"notes": {"type": "string"}}}, finish),
     ]
-    return make_task(run, "review", f"review slides {numbers}", system, prompt, tools, max_turns=40), changed
+    return make_task(work, "review", f"review {', '.join(ids)}", system, prompt, tools, max_turns=60), changed

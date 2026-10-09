@@ -313,7 +313,7 @@ def statement(scene, steps, lines, title=None):
 # ---------------------------------------------------------------- bullets / title (animated mode)
 @layout
 def bullets(scene, steps, title, items, focus=None):
-    """A title and bullet points revealed one per phase - replaces a text slide in "animated" mode.
+    """A slide-like title with bullet points revealed one per phase.
 
     items: 1-6 strings (long ones are wrapped).  focus: optional index of the item to emphasize at the end.
     Phases: one per item.

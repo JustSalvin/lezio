@@ -1,13 +1,18 @@
 TASK: plan the lesson.
-Look at every slide in scope (view_slides), then call submit_plan once with:
-- title: the lecture title;
-- outline: 3-6 sentences on what the lecture is about, its parts and how they connect;
-- slides: one entry per page in scope, in page order:
-  {"slide": n, "kind": "title|agenda|divider|content|diagram|interactive|references|other",
-   "skip": true|false, "summary": "one sentence on what the slide says",
-   "visual_idea": "none" | "template <name>: <what it shows>" | "custom: <what it shows>"}
-skip = true for interactive slides (live polls, quizzes or audience voting run with an external app), at
-depth 4 for minor slides, and for whatever the user's instructions say to skip; otherwise false.
-visual_idea: "none" in visual mode slides; never "none" in visual mode animated. Templates: title_card,
-bullets, statement, flow, mapping, compare, cards, encode, translate, number_base, diagram.
-The summaries are given to whoever writes the neighbouring slides, so make them informative.
+1. Read the material in scope (its listing is in the message; read gives the text of pages and sections)
+   and look at it (view): many pages are pictures, diagrams or tables.
+2. Decide how to teach it: the order of the topics, what goes together, what is left out.
+3. Call submit_plan once with:
+   - title: the lesson title;
+   - outline: 3-6 sentences on what the lesson covers, its parts and how they connect;
+   - segments: the ordered segments of the lesson. A segment is one topic, shown by one scene with its
+     narration: usually 0.5-3 minutes and 4-12 narration pieces. Each segment is
+     {"title", "goal": what the viewer must understand by its end, "sources": refs of the material it
+      covers (ranges allowed, e.g. "slides.pdf#p3-5"), "minutes": its length, "visual": the main visual
+      idea of its scene$style_field};
+   - skipped: [{"ref", "reason"}] for the material in scope that no segment covers (live polls or quizzes,
+     repeated or empty pages, minor details at depth 4, whatever the user's instructions exclude).
+Every page and section in scope must be in the sources of some segment or in skipped. The first segment
+opens the lesson (welcome, what it is about); the last one closes it with a short recap. Follow the depth
+for the length. Titles, goals and visual ideas are given to whoever writes the segments: make them
+specific.

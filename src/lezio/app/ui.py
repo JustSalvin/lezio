@@ -8,6 +8,7 @@ import time
 from contextlib import contextmanager
 
 from rich.console import Console
+from rich.markup import escape  # noqa: F401  (ui.escape: text that may contain [...])
 from rich.panel import Panel
 from rich.progress import (BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn,
                            TimeElapsedColumn)
@@ -20,7 +21,7 @@ console = Console(theme=THEME, highlight=False)
 
 
 def banner():
-    console.print(Panel.fit("[bold]lezio[/]  [muted]PDF slides → narrated video lecture[/]",
+    console.print(Panel.fit("[bold]lezio[/]  [muted]study material → narrated video lesson[/]",
                             border_style="accent", padding=(0, 2)))
 
 

@@ -5,8 +5,8 @@ area x in [-6.6, 6.6], y in [-3.6, 3.4]. Font sizes: titles 40-56, body 28-36, b
 """
 import textwrap
 
-from manim import (BOLD, DOWN, NORMAL, Arrow, Circle, DoubleArrow, Line, RoundedRectangle, Text, VGroup,
-                   VMobject)
+from manim import (BOLD, DOWN, NORMAL, Arrow, Circle, DoubleArrow, Line, MarkupText, RoundedRectangle, Text,
+                   VGroup, VMobject)
 
 FRAME_WIDTH, FRAME_HEIGHT = 14.222, 8.0
 SAFE_LEFT, SAFE_RIGHT, SAFE_BOTTOM, SAFE_TOP = -6.6, 6.6, -3.6, 3.4
@@ -67,6 +67,14 @@ def T(text, size=36, color=None, bold=False, font=None, **kwargs):
     Text does not wrap: use wrap(text, width) for long sentences."""
     return Text(text, font=font or _current["font"], font_size=size, color=color or _current["ink"],
                 weight=BOLD if bold else NORMAL, **kwargs)
+
+
+def MT(markup, size=36, color=None, bold=False, font=None, **kwargs):
+    """Text with Pango markup in the house style: formulas and mixed formatting, in any font.
+    Exponents and indices: MT("2<sup>k-1</sup> + log<sub>2</sub> n"); also <b>, <i>, <span color="...">.
+    Write "<" as "&lt;" and "&" as "&amp;"."""
+    return MarkupText(markup, font=font or _current["font"], font_size=size, color=color or _current["ink"],
+                      weight=BOLD if bold else NORMAL, **kwargs)
 
 
 def wrap(text, width=40):

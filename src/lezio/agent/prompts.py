@@ -1,14 +1,14 @@
-"""Loads the prompt texts in agent/prompts/ (Markdown with $placeholders, and modes.toml)."""
+"""Loads the prompt texts in agent/prompts/ (Markdown with $placeholders, and depth.toml)."""
 import tomllib
 from pathlib import Path
 from string import Template
 
 DIR = Path(__file__).parent / "prompts"
-MODES = tomllib.loads((DIR / "modes.toml").read_text())
+DEPTH = tomllib.loads((DIR / "depth.toml").read_text())
 
 
 def text(name, **values):
-    """agent/prompts/<name>.md with $placeholders filled."""
+    """agent/prompts/<name>.md (e.g. "plan", "rules/writing", "styles/slides") with $placeholders filled."""
     return Template((DIR / f"{name}.md").read_text().strip()).safe_substitute(**values)
 
 
@@ -16,9 +16,10 @@ def compose(*parts, **values):
     return "\n\n".join(text(p, **values) for p in parts)
 
 
-def visual_rule(mode):
-    return MODES["visual"][mode]
+def style_rule(style):
+    return text(f"styles/{style}")
 
 
 def depth_rule(depth):
-    return MODES["depth"][str(depth)]
+    d = DEPTH[str(depth)]
+    return f"{d['rule']} Length: about {d['minutes']}."

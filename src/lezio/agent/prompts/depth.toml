@@ -1,0 +1,22 @@
+# How each depth level is explained to the model. "minutes" = indicative length per page of slides or
+# per 150 words of text in scope (used in the plan).
+
+[1]
+name = "extensive"
+rule = "EXTENSIVE: say everything in the material, then go deeper: explain each term, give a concrete example or an analogy, connect to what comes before and after, ask rhetorical questions. Never summarize."
+minutes = "1-3 minutes per page of slides or per 150 words of text"
+
+[2]
+name = "faithful"
+rule = "FAITHFUL: say everything in the material - every point, definition, example and label of a figure - rephrased naturally for speech. Clarify only what would be unclear when heard. No extra examples. Never summarize."
+minutes = "0.5-1.5 minutes per page of slides or per 150 words of text"
+
+[3]
+name = "condensed"
+rule = "CONDENSED: the main points of the material, lightly summarized; merge minor details; drop repetitions."
+minutes = "20-45 seconds per page of slides or per 150 words of text"
+
+[4]
+name = "short"
+rule = "SHORT: short-video style: the key ideas only, punchy sentences, a hook at the start and a one-line takeaway at the end."
+minutes = "5-15 seconds per page of slides or per 150 words of text"

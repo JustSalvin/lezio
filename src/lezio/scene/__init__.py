@@ -17,4 +17,4 @@ from .layouts import (bullets, cards, compare, diagram, encode, flow, mapping, n
 from .style import (BACKGROUND, BLUE, BLUE_LIGHT, CHALK, CHALK_BLUE, CHALK_GREEN, CHALK_PINK,  # noqa: F401
                     CHALK_YELLOW, DARK, FONT, FRAME_HEIGHT, FRAME_WIDTH, GREEN, GREEN_LIGHT, GREY, GREY_LIGHT,
                     HAND, MONO, ORANGE, ORANGE_LIGHT, RED, RED_LIGHT, SAFE_BOTTOM, SAFE_LEFT, SAFE_RIGHT,
-                    SAFE_TOP, YELLOW, YELLOW_LIGHT, T, arrow, box, check, cross, fit, ink, person, theme, wrap)
+                    SAFE_TOP, YELLOW, YELLOW_LIGHT, MT, T, arrow, box, check, cross, fit, ink, person, theme, wrap)

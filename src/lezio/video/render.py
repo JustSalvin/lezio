@@ -179,9 +179,29 @@ def preview(lesson, segment, code):
     try:
         sheet = step_sheet(mp4, report, lesson.qa / f"{name}.png", PREVIEW_FPS)
         report["seconds"] = round(video_duration(mp4), 1)
+        shutil.copy2(mp4, lesson.qa / f"{name}.mp4")          # kept for a closer look at single frames
     finally:
         shutil.rmtree(lesson.media / name, ignore_errors=True)
     return sheet, report
+
+
+def piece_frame(lesson, segment_id, piece, final, where="end"):
+    """One frame of a segment's preview (final=False) or final video, in the middle or at the end of a
+    narration piece, as a JPEG file. Raises RenderError if there is no such video or piece."""
+    name = segment_id if final else f"preview_{segment_id}"
+    mp4 = lesson.segment_video(segment_id) if final else lesson.qa / f"{name}.mp4"
+    report_path = lesson.qa / f"{name}.json"
+    if not mp4.exists() or not report_path.exists():
+        raise RenderError(f"no {'final video' if final else 'preview'} of {segment_id}")
+    infos = {p["index"]: p for p in json.loads(report_path.read_text()).get("pieces", []) if "end" in p}
+    if piece not in infos:
+        raise RenderError(f"{segment_id} has pieces 0-{max(infos) if infos else 0}")
+    p = infos[piece]
+    t = (p["start"] + p["end"]) / 2 if where == "middle" else max(p["end"] - 0.05, p["start"])
+    out = lesson.qa / f"frame_{name}_{piece}_{where}.jpg"
+    subprocess.run([str(FFMPEG), "-y", "-loglevel", "error", "-ss", f"{t:.3f}", "-i", str(mp4), "-frames:v", "1",
+                    "-q:v", "3", str(out)], check=True)
+    return out
 
 
 def _ensure_audio(mp4):

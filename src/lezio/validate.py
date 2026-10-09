@@ -7,7 +7,7 @@ import ast
 import re
 
 from .script import normalize_piece
-from .settings import DEPTHS, STYLES
+from .settings import DEPTHS, SEGMENT_STYLES, STYLES
 
 MAX_WORDS = 70
 PIECE_KEYS = {"say", "pause"}
@@ -150,6 +150,8 @@ def check_script(lesson, script, material=None):
                 material.resolve(ref)
             except RefError as e:
                 errors.append(f"{sid}: sources: {e}")
+        if script["settings"]["style"] == "auto" and seg.get("style") not in SEGMENT_STYLES:
+            warnings.append(f"{sid}: no style chosen (style auto): {', '.join(SEGMENT_STYLES)} - slides is used")
         if not seg.get("narration"):
             warnings.append(f"{sid}: not written yet")
             continue

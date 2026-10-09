@@ -1,7 +1,15 @@
-TASK: write the narration script of a group of slides.
-1. Look at the slides (view_slides).
-2. Write their script and call submit_script; fix every reported problem and submit again.
-3. If the accepted script contains animations, call preview_animations, look at the frames, fix real
-   defects (overlaps, text cut off or outside the frame, elements that never appear or never leave, content
-   that does not match the narration) by submitting again, then preview again.
-4. Call finish.
+TASK: write the narration and the scene of the segments given in the message.
+For each segment:
+1. Look at its sources: their text is in the message (read gives more); look at pages and figures with
+   view before deciding what to show.
+2. Write its narration and scene code and call submit_segment. The program checks them and renders a
+   low-resolution preview with estimated timing: you get, for every narration piece, the frame in its
+   middle and the frame at its end, with automatic warnings (texts cut off or overlapping, animations
+   longer than the speech).
+3. Look at the frames carefully (view_frame shows one of them at full size, for small text and details).
+   If something is wrong - overlapping or cut-off text, text too small to
+   read, elements left over from a previous step, a screen that does not match what is being said, an
+   empty or frozen screen for long - fix it and submit again. Otherwise go on.
+When every segment is accepted, call finish.
+The segments are parts of one lesson: welcome the viewer only in the first segment of the lesson, link
+each segment naturally to the previous one, and close the last segment of the lesson with a short recap.
