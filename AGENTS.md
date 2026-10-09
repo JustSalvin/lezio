@@ -1,5 +1,8 @@
 # AGENTS.md — developer guide
 
+> **Rebuild in progress**: slide-reader is being rebuilt into **lezio** (study material → video lesson,
+> any style, one workflow). Before any change, read `docs/HANDOFF.md` and follow its execution plan.
+
 Guide for coding agents (and people) **developing** slide-reader. The program never reads this file at
 runtime: LLM tasks get their instructions from `slidereader/agent/prompts/`.
 
