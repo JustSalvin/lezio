@@ -38,7 +38,7 @@ Options
   --visual MODE         slides | mixed | animated
   --depth N             1 extensive | 2 faithful | 3 condensed | 4 short
   --instructions "..."  instructions for the agent, saved in the lesson
-                        (e.g. "Skip Mentimeter slides. Never read e-mail addresses.")
+                        (e.g. "Skip interactive slides such as live polls or quizzes.")
   --voice NAME          voice of the TTS engine (see ./sr tts)
   --engine NAME         TTS engine: voxtral | edge
   --tts KEY=VALUE       any option of the TTS engine (repeatable), e.g. --tts temperature=0.6

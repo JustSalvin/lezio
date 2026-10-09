@@ -26,7 +26,7 @@ language = "Italian"
 # Default visual mode:  slides | mixed | animated
 visual = "mixed"
 # Default depth:  1 extensive | 2 faithful | 3 condensed | 4 short
-depth = 1
+depth = 2
 # Seconds of silence between two spoken pieces
 beat_gap = 0.35
 
@@ -39,7 +39,7 @@ backend = "claude-subscription"
 # Model for the agent ("" = Claude Code default)
 model = ""
 # Instructions given to the agent in every lesson (a lesson can add its own with --instructions).
-# Example: "Skip Mentimeter slides. Never read e-mail addresses aloud."
+# Example: "Skip interactive slides such as live polls or quizzes. Do not read URLs aloud."
 instructions = ""
 # Slides written per agent task (smaller = more focused tasks, more calls)
 group_size = 4

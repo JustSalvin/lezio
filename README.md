@@ -69,7 +69,7 @@ instructions, rewrite from scratch.
 | `--pages 1-20` | pages to cover (default: all) |
 | `--visual MODE` | `slides` · `mixed` · `animated` |
 | `--depth N` | `1` extensive · `2` faithful · `3` condensed · `4` short |
-| `--instructions "..."` | instructions for the agent, saved in the lesson, e.g. `"Skip Mentimeter slides. Never read e-mail addresses aloud."` |
+| `--instructions "..."` | instructions for the agent, saved in the lesson, e.g. `"Skip interactive slides such as live polls or quizzes. Do not read URLs aloud."` |
 | `--engine NAME` / `--voice NAME` / `--tts KEY=VALUE` | TTS engine, voice and any engine option for this lesson |
 | `--id NAME` | lesson name (default: from the PDF file name) |
 | `--rewrite` | write the script again from scratch |
@@ -102,8 +102,8 @@ instructions, rewrite from scratch.
 
 | Depth | Narration |
 |---|---|
-| 1 — extensive | everything on the slides, plus explanations, examples and connections (default) |
-| 2 — faithful | everything on the slides, nothing added, nothing cut |
+| 1 — extensive | everything on the slides, plus explanations, examples and connections |
+| 2 — faithful | everything on the slides, nothing added, nothing cut (default) |
 | 3 — condensed | the main points, lightly summarized |
 | 4 — short | very concise, short-video style |
 

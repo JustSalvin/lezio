@@ -183,7 +183,7 @@ Look at every slide in scope (view_slides), then call submit_plan once with:
   {"slide": n, "kind": "title|agenda|divider|content|diagram|interactive|references|other",
    "skip": true|false, "summary": "one sentence on what the slide says",
    "visual_idea": "none" | "template <name>: <what it shows>" | "custom: <what it shows>"}
-skip = true for interactive slides (live polls/quizzes: Mentimeter, Kahoot, Wooclap, Slido...), at depth 4
+skip = true for interactive slides (live polls, quizzes or audience voting run with an external app), at depth 4
 for minor slides, and for whatever the user's instructions say to skip; otherwise false.
 visual_idea: "none" in visual mode slides; never "none" in visual mode animated. Templates: title_card,
 bullets, statement, flow, mapping, compare, cards, encode, translate, number_base, diagram.

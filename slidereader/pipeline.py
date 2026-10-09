@@ -155,7 +155,7 @@ class Run:
                 flags["depth"] = int(ask("Depth: 1 extensive, 2 faithful, 3 condensed, 4 short",
                                          [1, 2, 3, 4], base["depth"]))
             if "instructions" not in flags and self.interactive:
-                flags["instructions"] = ask("Instructions for the agent (optional, e.g. 'skip Mentimeter slides')",
+                flags["instructions"] = ask("Instructions for the agent (optional, e.g. 'skip interactive slides such as polls')",
                                             default=base["instructions"]) or ""
         elif not flags and not self.rewrite and self.interactive:   # existing lesson, nothing specified
             print(f"\nLesson {lesson_id}: pages {base['pages'] or 'all'}, {base['visual']}, depth {base['depth']}, "
