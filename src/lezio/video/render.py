@@ -67,8 +67,7 @@ def step_sheet(mp4, report, png, fps, width=1440):
         x = 6 + (k % 2) * 2 * (cell_w + 6)
         y = 6 + (k // 2) * (cell_h + cap_h + 8)
         words = p["say"].split()
-        who = "" if p["speaker"] == "teacher" else f"{p['speaker']}: "
-        caption = f"piece {p['index']} · {who}{' '.join(words[:12])}" + ("…" if len(words) > 12 else "")
+        caption = f"piece {p['index']} · {' '.join(words[:12])}" + ("…" if len(words) > 12 else "")
         while draw.textlength(caption, font=font) > 2 * cell_w and len(caption) > 10:
             caption = caption[:-2] + "…" if not caption.endswith("…") else caption[:-3] + "…"
         draw.text((x, y + 2), caption, fill=(235, 235, 235), font=font)
@@ -99,7 +98,7 @@ def fingerprint(lesson, script, segment):
     v = CONFIG["video"]
     h.update(f"{s['style']}|{s['piece_gap']}|{v['width']}x{v['height']}@{v['fps']}".encode())
     meta = lesson.durations_meta()
-    for key, _, _, _ in pieces(segment):
+    for key, _, _ in pieces(segment):
         h.update(f"{key}:{meta.get(key, {}).get('duration')}".encode())
     path = lesson.scene_file(scene_name(segment))
     h.update(path.read_bytes() if path.exists() else b"")
@@ -123,7 +122,7 @@ def is_outdated(lesson, script, segment):
 
 def missing_audio(lesson, segments):
     meta = lesson.durations_meta()
-    return [k for k, text, _, _ in (p for s in segments for p in pieces(s))
+    return [k for k, text, _ in (p for s in segments for p in pieces(s))
             if meta.get(k, {}).get("text") != text or not (lesson.audio / f"{k}.wav").exists()]
 
 

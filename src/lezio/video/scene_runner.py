@@ -20,6 +20,7 @@ from ..lesson import Lesson
 from ..scene.material import SceneMaterial
 from ..scene.style import FRAME_HEIGHT, FRAME_WIDTH, theme
 from ..scene.sync import Steps
+from ..settings import segment_style
 from ..script import estimate_seconds, find_segment, load_script, normalize_piece, piece_key, scene_name
 from ..validate import check_scene_code
 
@@ -122,7 +123,7 @@ class SegmentScene(Scene):
 
         def on_start(t):
             report["pieces"].append({"index": t.index, "start": round(self.renderer.time, 3), "say": t.say,
-                                     "speaker": t.speaker, "duration": round(t.duration, 2)})
+                                     "duration": round(t.duration, 2)})
 
         def on_end(t):
             info = report["pieces"][-1]
@@ -132,7 +133,7 @@ class SegmentScene(Scene):
                                           "speech (the voice waits for them)")
             report["warnings"] += [f"end of piece {t.index}: {w}" for w in layout_warnings(self)]
 
-        theme(self, STYLE_THEME.get(settings["style"], "light"))
+        theme(self, STYLE_THEME.get(segment_style(settings, segment), "light"))
         namespace = {"__name__": f"lezio_scene_{segment['id']}", "__file__": str(code_path)}
         steps = Steps(self, pieces, settings["piece_gap"], on_start=on_start, on_end=on_end)
         try:

@@ -480,35 +480,5 @@ def page_walkthrough(scene, steps, material, ref, marks, zoom=False):
             t.play(group.animate.scale(1 + 0.006 * t.duration), rt=t.left, rate_func=linear)
 
 
-# ---------------------------------------------------------------- review
-def countdown(t, seconds=None, at=None, color=ORANGE):
-    """A visible countdown during the silent pause after the current piece (time to think).
-
-    Waits for the end of the speech of `t`, then counts down for t.pause seconds (or `seconds`), then
-    disappears. at: position of the countdown (default: bottom right corner).
-    """
-    from manim import TAU, Arc, Transform, linear
-    total = seconds if seconds is not None else t.pause_left
-    t.finish()
-    if total < 1:
-        return
-    scene, n = t.scene, max(int(round(total - 0.4)), 1)
-    center = at if at is not None else [5.7, -2.9, 0]
-    ring = Circle(radius=0.55, stroke_color="#D9D9D9", stroke_width=10).move_to(center)
-    arc = Arc(radius=0.55, start_angle=TAU / 4, angle=TAU, stroke_color=color, stroke_width=10).move_arc_center_to(center)
-    num = T(str(n), 44, color, bold=True).move_to(center)
-    scene.play(FadeIn(ring), FadeIn(arc), FadeIn(num), run_time=0.2)
-    each = (total - 0.4) / n
-    for i in range(n):
-        left = TAU * (n - i - 1) / n
-        target = Arc(radius=0.55, start_angle=TAU / 4, angle=max(left, 0.001), stroke_color=color,
-                     stroke_width=10 if left > 0 else 0).move_arc_center_to(center)
-        scene.play(Transform(arc, target), run_time=each, rate_func=linear)
-        if i < n - 1:
-            num.become(T(str(n - i - 1), 44, color, bold=True).move_to(center))
-    scene.play(FadeOut(ring), FadeOut(arc), FadeOut(num), run_time=0.2)
-    t.pause_left = max(t.pause_left - total, 0)
-
-
 LAYOUTS = {f.__name__: f for f in (title_card, bullets, statement, flow, mapping, compare, cards, diagram, encode,
                                    translate, number_base, page_walkthrough)}

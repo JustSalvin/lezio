@@ -12,7 +12,7 @@ depend on it.
 """
 from manim import *  # noqa: F401,F403  (all of Manim for scene code)
 
-from .layouts import (bullets, cards, compare, countdown, diagram, encode, flow, mapping, number_base,  # noqa: F401
+from .layouts import (bullets, cards, compare, diagram, encode, flow, mapping, number_base,  # noqa: F401
                       page_walkthrough, statement, title_card, translate)
 from .style import (BACKGROUND, BLUE, BLUE_LIGHT, CHALK, CHALK_BLUE, CHALK_GREEN, CHALK_PINK,  # noqa: F401
                     CHALK_YELLOW, DARK, FONT, FRAME_HEIGHT, FRAME_WIDTH, GREEN, GREEN_LIGHT, GREY, GREY_LIGHT,

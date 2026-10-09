@@ -68,11 +68,15 @@ What works and must be **kept** (reuse the code):
 - **Name**: package `lezio/`, command `./lezio` (bash wrapper like `sr`), README/AGENTS updated.
   Rename the GitHub repo to `lezio` with `gh repo rename lezio` (ask the user before doing it).
   Do not rename the local folder (the user can do it).
-- **Two orthogonal axes, both just prompts** (files under `lezio/agent/prompts/`):
-  - `style` (visual): `animated` · `slides` · `mixed` · `whiteboard`
-  - `format` (spoken structure): `lecture` (default) · `dialogue` · `review`
-  Any combination is valid (e.g. dialogue + slides). The program composes
-  `role.md + styles/<style>.md + formats/<format>.md + depth rule + user instructions`.
+- **One axis, just prompts**: `style` (visual): `animated` · `slides` · `whiteboard` · `auto` (files
+  under `lezio/agent/prompts/styles/`). **`auto` (user decision during execution, first called `mixed`)** =
+  the agent chooses
+  among the other three for each segment and may use all of them, switching along the video: the plan
+  gives every segment a `style`; the write task uses that style's rules; the scene's default theme
+  follows it (scene code may still switch theme inside a segment). The program composes `role.md + styles/<style>.md + depth rule +
+  user instructions`.
+- **Update during execution (user decision)**: the `format` axis (`dialogue`, `review`) was dropped. A
+  lesson is always a lecture with one voice: no speakers, no per-speaker voices, no countdown helpers.
 - **Segments instead of slides.** A lesson is an ordered list of segments. A segment = narration
   pieces (one audio file each) + one scene (Python code written by the agent) that is rendered with the
   narration audio. Everything (plan, write, preview, review, redo, fingerprints) works per segment.
@@ -80,9 +84,6 @@ What works and must be **kept** (reuse the code):
   library (`lezio.scene`) for: audio sync (required), access to the material (page images, figures,
   text-line coordinates for highlighting), house style, a few layout helpers. The 11 old templates may
   survive as optional helpers inside `lezio.scene` but are never imposed.
-- **Multi-voice** for `dialogue`: narration pieces carry an optional `speaker` (`teacher` default,
-  `student`); `config.toml` maps speakers to voices per engine (e.g. `[tts.voxtral.voices] teacher =
-  "it_male", student = "it_female"`). Audio meta/fingerprints include the speaker's voice.
 - **Safety of agent code**: scene code is statically checked before running (AST): allowed imports
   only (`manim`, `numpy`, `math`, `random`, `itertools`, `colorsys`, `lezio.scene`); forbidden names
   (`open`, `exec`, `eval`, `compile`, `__import__`, `globals`, `getattr` on modules, `os`, `sys`,
@@ -98,7 +99,7 @@ lezio                        bash wrapper → .venv/bin/python -m lezio
 lezio/
   config.py                  paths, CONFIG, SUBPROCESS_ENV
   lesson.py                  Lesson paths (lessons/<id>/...), slugify, listing
-  settings.py                per-video choices (sources, style, format, depth, instructions) vs config; TTS options + voices per speaker
+  settings.py                per-video choices (style, depth, instructions, focus) vs config; TTS options
   script.py                  script.json v2: load/save, narration pieces, keys
   validate.py                narration rules + scene code checks (AST allowlist) + structure
   material/                  ingestion of study material → build/material/ index
@@ -112,11 +113,10 @@ lezio/
   agent/
     tasks.py                 plan / write segment(s) / review — tools defined here
     prompts/                 role.md, plan.md, write.md, review.md, rules/{writing.md,narration_format.md,scene_api.md},
-                             styles/{animated,slides,mixed,whiteboard}.md, formats/{lecture,dialogue,review}.md,
-                             depth.toml
+                             styles/{animated,slides,whiteboard,auto}.md, depth.toml
     prompts.py               loader (string.Template, $placeholders)
     backends/                reuse as is
-  voice/                     reuse; add speaker → voice mapping
+  voice/                     reuse
   video/
     scene_runner.py          Manim scene: loads lessons/<id>/scenes/<segment>.py, runs build(scene, steps, material)
     manim_entry.py
@@ -139,19 +139,19 @@ archive/slide-reader/        old lessons
 
 ```json
 {
-  "settings": {"style": "mixed", "format": "lecture", "depth": 2, "instructions": "",
+  "settings": {"style": "auto", "depth": 2, "instructions": "",
                "focus": {"input/slides.pdf": "1-20"}},
   "title": "Rappresentazione dell'informazione",
   "segments": [
     {"id": "s01", "title": "Introduzione",
      "sources": ["slides.pdf#p1-3"],
      "narration": ["Benvenuti...", {"say": "E voi cosa ne pensate?", "pause": 2},
-                   {"say": "Perché proprio due simboli?", "speaker": "student"}],
+                   "Perché proprio due simboli?"],
      "scene": "s01"}
   ]
 }
 ```
-- `narration`: one entry per spoken piece (string or object with `say`, optional `pause`, `speaker`).
+- `narration`: one entry per spoken piece (string or object with `say` and optional `pause`).
 - `scene`: file `scenes/<id>.py` defining `def build(scene, steps, material): ...`; it must call
   `steps()` once per narration piece, in order (exactly the old `Steps` contract).
 - Audio keys: `<segment>_<piece index>` (e.g. `s01_03`).
@@ -169,7 +169,7 @@ archive/slide-reader/        old lessons
 Refs are what the agent cites in `sources` and passes to tools. Repeated headers/footers removed (reuse
 `pdf.py` chrome detection).
 
-### 4.3 Agent tasks (same for every style/format)
+### 4.3 Agent tasks (same for every style)
 
 All tools return text/images; submissions are validated on the spot. The model has no files/shell/web.
 
@@ -179,23 +179,19 @@ All tools return text/images; submissions are validated on the spot. The model h
 | **write** (1-3 segments per task) | `read`, `view`, `submit_segment(id, narration, code)` → checks narration rules + code (AST allowlist, compiles, has `build`, steps count) and **renders a low-res preview automatically**, returning contact-sheet frames; `finish(notes)` | narration + `scenes/<id>.py` |
 | **review** | `view_final(segment)` (frames of the final render), `read`, `view`, `replace_segment(id, narration?, code?)` (validated + preview), `finish` | fixed segments |
 
-Context given to every write task: style + format + depth rules, user instructions, lesson outline,
+Context given to every write task: style + depth rules, user instructions, lesson outline,
 neighbouring segments' titles and the last sentences of the previous segment, the scene helper API
 reference (generated from docstrings), the house style.
 
-Default behaviour per **format**:
-- `lecture`: one voice, teacher tone (reuse old writing rules: write for the ear, numbers in words,
-  acronyms, phonetic foreign names, beats of 8-60 words).
-- `dialogue`: teacher + student; the student asks natural questions, makes typical mistakes, the teacher
-  answers; speakers alternate; no reading of bullet lists.
-- `review`: for each key concept: a question, a pause (`"pause": 3-5`) with a visible countdown or
-  "think about it" cue, then the answer and a one-line takeaway.
+Narration: one voice, teacher tone (reuse old writing rules: write for the ear, numbers in words,
+acronyms, phonetic foreign names, pieces of 8-60 words).
 
 Default behaviour per **style** (prompt guidance only, agent is free):
 - `animated`: full animations, no slide look; diagrams, transformations, motion.
 - `slides`: clean generated slides (title + content), progressive reveal synced to the voice,
   highlight what is being said; may show original pages/figures when useful.
-- `mixed`: slides for structure, animations where seeing explains better.
+- `auto` (default): the agent picks `animated`, `slides` or `whiteboard` per segment (stored in the segment),
+  using each where it explains best, and may alternate them along the video.
 - `whiteboard`: white/dark board, content appears as if written/drawn by hand step by step (Manim
   `Write`/`Create`, handwriting-like font if available), arrows and annotations added while talking.
 
@@ -208,16 +204,15 @@ resolve (wizard/options) → summary + confirm → ingest material (new sources 
 → re-render fixed → join → final panel
 ```
 - Wizard for a new lesson: choose sources (multi-select files from `input/`, or paths given on the
-  command line), optional page ranges for PDFs (`focus`), style, format, depth, instructions.
-- Existing lesson menu: update · add/remove sources · change style/format/depth (rewrites, backup) ·
+  command line), optional page ranges for PDFs (`focus`), style, depth, instructions.
+- Existing lesson menu: update · add/remove sources · change style/depth (rewrites, backup) ·
   change instructions · rewrite from scratch.
 - `./lezio redo <lesson> --segments s03,s05 [--part script|voice|video] [--note "..."]`.
 - `./lezio status <lesson>`: table of segments (pieces, voice, video state).
-- Options: `--style`, `--format`, `--depth`, `--instructions`, `--focus "file.pdf:1-20"`, `--id`,
+- Options: `--style`, `--depth`, `--instructions`, `--focus "file.pdf:1-20"`, `--id`,
   `--rewrite`, `--no-review`, `-y`. Sources are positional: `./lezio input/a.pdf input/notes.md`.
 
 ### 4.5 config.toml changes
-- `[tts.<engine>.voices]` speaker → voice (`teacher`, `student`); `voice` kept as the teacher default.
 - `[video]` unchanged; `[tuning]`: `segments_per_task` (replaces `group_size`), `preview_rounds`,
   `render_timeout_seconds`, `review_group_size`, `parallel_jobs`, image sizes.
 - `[agent]` unchanged (backend, model, effort, per-task overrides `[agent.plan|write|review]`).
@@ -241,18 +236,19 @@ resolve (wizard/options) → summary + confirm → ingest material (new sources 
   narration with placeholder timing → preview contact sheets → final render → join.
 
 **Phase 3 — script v2 + voice**
-- script.json v2, narration pieces with `speaker`; voice worker uses speaker → voice mapping.
-- Check: dialogue segment with two voices generates and renders.
+- script.json v2; voice worker generates the pieces of the segments (one voice).
+- Check: a segment with real voice generates and renders.
 
 **Phase 4 — agent tasks + prompts**
-- Prompts: role, plan, write, review, rules (writing/narration format/scene API), styles ×4, formats ×3,
-  depth.toml. Tools as in 4.3; scene API reference generated from `lezio/scene` docstrings.
-- Check: plan + write on a 3-5 minute test (PDF pages 21-26 of the archived deck) in `mixed/lecture`;
-  then the same material in `animated`, `whiteboard`, `dialogue`, `review`; read `build/agent/log.jsonl`.
+- Prompts: role, plan, write, review, rules (writing/narration format/scene API), styles ×4, depth.toml. Tools as in 4.3; scene API reference generated from `lezio/scene` docstrings.
+- Check: plan + write on a 3-5 minute test (PDF pages 21-26 of the archived deck) in `auto`;
+  then the same material in `animated`, `slides`, `whiteboard`; read `build/agent/log.jsonl`.
 
 **Phase 5 — program workflow + UI**
-- `app/run.py` generic flow, wizard (sources multi-select, style, format, depth, instructions), summary,
+- `app/run.py` generic flow, wizard (sources multi-select, style, depth, instructions), summary,
   status table by segment, redo by segment, final panel. Reuse ui.py/wizard.py patterns.
+- `./lezio config` (requested by the user during execution): edit every config.toml setting through the
+  arrow-key menus; config.toml stays the only place of configuration (written with tomlkit, comments kept).
 - Check: full `./lezio` runs: new lesson from a .md file → slides video; from the PDF → animated video;
   resume after interruption; change style → rewrite with backup; voice change in config → regenerate.
 
@@ -294,6 +290,5 @@ resolve (wizard/options) → summary + confirm → ingest material (new sources 
 
 ## 7. Open points to confirm with the user during execution
 - `gh repo rename lezio` (outward-facing).
-- Whether `review` format should also be offered as an automatic appendix ("add a review at the end").
 - Handwriting font for `whiteboard` (needs a font with a suitable licence; otherwise Manim default + `Write`).
 - PPTX support priority (needs LibreOffice for page images).

@@ -29,9 +29,10 @@ def _run(args, on_event=None, log=None):
         raise VoiceError(error or " | ".join(l for l in last if l) or "speech synthesis failed")
 
 
-def synthesize_lesson(lesson, pages="", on_event=None):
+def synthesize_lesson(lesson, segments=None, on_event=None):
+    """Generate the missing or changed narration pieces (of some segments, or of the whole lesson)."""
     lesson.logs.mkdir(parents=True, exist_ok=True)
-    _run(["lesson", lesson.id, "--pages", pages], on_event, lesson.logs / "voice.txt")
+    _run(["lesson", lesson.id, "--segments", ",".join(segments or [])], on_event, lesson.logs / "voice.txt")
 
 
 def sample(text, overrides, out, on_event=None):

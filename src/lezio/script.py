@@ -1,10 +1,11 @@
 """The lesson script (lessons/<id>/script.json, version 2): loading, saving, narration pieces.
 
     {"version": 2,
-     "settings": {"style": "mixed", "format": "lecture", "depth": 2, "instructions": "", "focus": {...}},
+     "settings": {"style": "auto", "depth": 2, "instructions": "", "focus": {...}},
      "title": "...", "outline": "...", "plan_key": "...",
      "segments": [{"id": "s01", "title": "...", "goal": "...", "sources": ["slides.pdf#p1-3"], "minutes": 1.5,
-                   "narration": ["...", {"say": "...", "pause": 2}, {"say": "...", "speaker": "student"}],
+                   "style": "slides",                  (only with style "auto": the segment's own style)
+                   "narration": ["...", {"say": "...", "pause": 2}, "..."],
                    "scene": "s01"}],
      "skipped": [{"ref": "slides.pdf#p14", "reason": "live poll"}]}
 
@@ -45,11 +46,10 @@ def save_script(path: Path, script):
 
 
 def normalize_piece(piece):
-    """A narration piece as {"say", "pause", "speaker"} (a plain string is said by the teacher)."""
+    """A narration piece as {"say", "pause"} (pause = seconds of silence after it)."""
     if isinstance(piece, str):
-        return {"say": piece, "pause": 0, "speaker": "teacher"}
-    return {"say": piece.get("say", ""), "pause": piece.get("pause", 0) or 0,
-            "speaker": piece.get("speaker", "teacher") or "teacher"}
+        return {"say": piece, "pause": 0}
+    return {"say": piece.get("say", ""), "pause": piece.get("pause", 0) or 0}
 
 
 def piece_key(segment_id, i):
@@ -57,13 +57,13 @@ def piece_key(segment_id, i):
 
 
 def pieces(segment):
-    """[(key, text, pause_after, speaker)] for the narration of one segment."""
-    return [(piece_key(segment["id"], i), p["say"], p["pause"], p["speaker"])
+    """[(key, text, pause_after)] for the narration of one segment."""
+    return [(piece_key(segment["id"], i), p["say"], p["pause"])
             for i, p in enumerate(normalize_piece(x) for x in segment.get("narration") or [])]
 
 
 def audio_pieces(segments):
-    """Flat, ordered list of (key, text, pause_after, speaker) for every spoken piece."""
+    """Flat, ordered list of (key, text, pause_after) for every spoken piece."""
     return [p for s in segments for p in pieces(s)]
 
 

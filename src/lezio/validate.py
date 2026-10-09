@@ -7,10 +7,10 @@ import ast
 import re
 
 from .script import normalize_piece
-from .settings import DEPTHS, FORMATS, SPEAKERS, STYLES
+from .settings import DEPTHS, STYLES
 
 MAX_WORDS = 70
-PIECE_KEYS = {"say", "pause", "speaker"}
+PIECE_KEYS = {"say", "pause"}
 SEGMENT_ID = re.compile(r"^s\d{2,3}$")
 SYMBOLS = re.compile(r"[()\[\]{}/\\*#_|<>=+~^@%&$€§]")
 
@@ -83,21 +83,19 @@ def check_scene_code(code):
 
 
 # ------------------------------------------------------------------ narration
-def check_narration(narration, fmt="lecture"):
+def check_narration(narration):
     """Narration rules. Returns (errors, warnings)."""
     errors, warnings = [], []
     if not isinstance(narration, list) or not narration:
         return ["narration must be a non-empty list of pieces"], []
-    speakers = SPEAKERS.get(fmt, ("teacher",))
-    used = set()
     for i, raw in enumerate(narration):
         where = f"piece {i}"
         if isinstance(raw, dict):
             unknown = set(raw) - PIECE_KEYS
             if unknown:
-                errors.append(f"{where}: unknown keys {sorted(unknown)} (allowed: say, pause, speaker)")
+                errors.append(f"{where}: unknown keys {sorted(unknown)} (allowed: say, pause)")
         elif not isinstance(raw, str):
-            errors.append(f"{where}: must be a string or {{\"say\": ..., \"pause\": ..., \"speaker\": ...}}")
+            errors.append(f"{where}: must be a string or {{\"say\": ..., \"pause\": ...}}")
             continue
         p = normalize_piece(raw)
         text = p["say"]
@@ -114,12 +112,6 @@ def check_narration(narration, fmt="lecture"):
             errors.append(f"{where}: {words} words - split it into pieces of at most {MAX_WORDS} words")
         if not isinstance(p["pause"], (int, float)) or isinstance(p["pause"], bool) or not 0 <= p["pause"] <= 10:
             errors.append(f"{where}: pause must be a number of seconds between 0 and 10")
-        if p["speaker"] not in speakers:
-            errors.append(f"{where}: speaker '{p['speaker']}' is not allowed in format {fmt} "
-                          f"(speakers: {', '.join(speakers)})")
-        used.add(p["speaker"])
-    if fmt == "dialogue" and not errors and used != set(speakers):
-        warnings.append("a dialogue segment should give pieces to both the teacher and the student")
     return errors, warnings
 
 
@@ -128,8 +120,6 @@ def check_settings(settings):
     errors = []
     if settings["style"] not in STYLES:
         errors.append(f"settings.style must be one of {', '.join(STYLES)}")
-    if settings["format"] not in FORMATS:
-        errors.append(f"settings.format must be one of {', '.join(FORMATS)}")
     if settings["depth"] not in DEPTHS:
         errors.append(f"settings.depth must be one of {sorted(DEPTHS)}")
     if not isinstance(settings.get("instructions", ""), str):
@@ -163,7 +153,7 @@ def check_script(lesson, script, material=None):
         if not seg.get("narration"):
             warnings.append(f"{sid}: not written yet")
             continue
-        e, w = check_narration(seg["narration"], script["settings"]["format"])
+        e, w = check_narration(seg["narration"])
         errors += [f"{sid}: {x}" for x in e]
         warnings += [f"{sid}: {x}" for x in w]
         path = lesson.scene_file(scene_name(seg))

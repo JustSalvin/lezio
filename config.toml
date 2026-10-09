@@ -1,7 +1,7 @@
 # lezio configuration.
 #
-# Only stable configuration lives here. Choices made for each video (study material, style, format,
-# depth, instructions for the agent) are given to the program - wizard or command-line options - and
+# Only stable configuration lives here. Choices made for each video (study material, style, depth,
+# instructions for the agent) are given to the program - wizard or command-line options - and
 # saved in the lesson. Edit this file by hand or interactively with: ./lezio config
 
 [tts]
@@ -12,24 +12,16 @@ engine = "voxtral"
 
 [tts.voxtral]
 model = "mlx-community/Voxtral-4B-TTS-2603-mlx-6bit"
-# Voice of the teacher (the only speaker of lectures and reviews)
 voice = "it_male"
 temperature = 0.8
-
-[tts.voxtral.voices]
-# Voices of the other speakers (format "dialogue": a teacher and a student)
-student = "it_female"
 
 [tts.edge]
 voice = "it-IT-DiegoNeural"
 rate = "+0%"
 pitch = "+0Hz"
 
-[tts.edge.voices]
-student = "it-IT-ElsaNeural"
-
 [narration]
-# Language of the narration and of the on-screen texts (should match the voices)
+# Language of the narration and of the on-screen texts (should match the voice)
 language = "Italian"
 # Seconds of silence between two spoken pieces
 piece_gap = 0.35
