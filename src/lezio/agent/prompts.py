@@ -23,3 +23,10 @@ def style_rule(style):
 def depth_rule(depth):
     d = DEPTH[str(depth)]
     return f"{d['rule']} Length: about {d['minutes']}."
+
+
+def target_minutes(depth, units):
+    """(low, high) minutes of the whole lesson for `units` pages / 150-word blocks of material
+    (plus half a minute for the opening and the closing recap)."""
+    lo, hi = DEPTH[str(depth)]["seconds"]
+    return units * lo / 60 + 0.5, units * hi / 60 + 0.5

@@ -148,6 +148,10 @@ def plan_task(work):
     prompt = settings_block(work)
     if auto:
         prompt += "\n\nThe styles to choose from:\n" + "\n".join(f"- {prompts.style_rule(x)}" for x in SEGMENT_STYLES)
+    units, described = work.material.size(focus)
+    lo, hi = prompts.target_minutes(s["depth"], units)
+    prompt += (f"\n\nTARGET LENGTH of the whole lesson: about {lo:.1f}-{hi:.1f} minutes ({described} in scope, "
+               f"depth {s['depth']}). The \"minutes\" of the segments must add up to about this.")
     prompt += "\n\nMATERIAL IN SCOPE (refs, first line or heading, size):\n" + work.material.overview(focus)
 
     def submit(args):
@@ -204,6 +208,9 @@ def plan_task(work):
         missing = [r for r in scope if r not in covered and r not in skipped_items]
         if missing:
             problems.append("not covered by any segment and not in skipped: " + ", ".join(missing[:30]))
+        total = sum(e["minutes"] for e in out if isinstance(e["minutes"], (int, float)))
+        if total > 1.5 * hi + 0.5:
+            problems.append(f"the segments add up to {total:.1f} minutes: the target is about {lo:.1f}-{hi:.1f}")
         if problems:
             return rejected(problems, "Plan rejected:")
         for k, entry in enumerate(out, 1):
@@ -287,6 +294,11 @@ class SegmentSubmissions:
         save_script(work.lesson.script, work.script)
         self.accepted[sid] = True
         notes = warnings + report.get("warnings", [])
+        spoken = sum(len(normalize_piece(p)["say"].split()) for p in narration) / 2.5
+        planned = 60 * (seg.get("minutes") or 0)
+        if planned and spoken > 1.4 * planned + 10:
+            notes.insert(0, f"the narration lasts about {spoken:.0f} s, the plan gives this segment {planned:.0f} s: "
+                            "shorten it")
         content = [f"Segment {sid} accepted and saved. Preview: {report.get('seconds', '?')} s with estimated "
                    "timing; for every piece, the frame in its middle and the frame at its end:"]
         if sheet:

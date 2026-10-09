@@ -35,9 +35,10 @@ def status(a):
         ("instructions", ui.escape(s["instructions"]) or "[muted]none[/]"),
         ("video", rel(lesson.output) if lesson.output.exists() else "[muted]not assembled yet[/]"),
     ], title="status")
-    table = Table(box=None, padding=(0, 2))
-    for col in ("segment", "title", "style", "pieces", "voice", "video"):
-        table.add_column(col, style="muted" if col in ("segment", "pieces") else None,
+    table = Table(box=None, padding=(0, 1))
+    for col, width in (("segment", 7), ("title", None), ("style", 10), ("pieces", 6), ("voice", 6), ("video", 11)):
+        table.add_column(col, style="muted" if col in ("segment", "pieces") else None, no_wrap=True,
+                         overflow="ellipsis", min_width=width, max_width=30 if width is None else None,
                          justify="right" if col in ("pieces", "voice") else "left")
     for seg in script["segments"]:
         keys = pieces(seg)

@@ -223,6 +223,22 @@ class Material:
             out += [s["items"][n - 1]["ref"] for n in numbers]
         return out
 
+    def size(self, focus=None):
+        """Amount of material in scope: (units, description). A unit is a page, a picture or 150 words."""
+        in_scope = set(self.scope(focus))
+        pages = words = pictures = 0
+        for s in self.sources.values():
+            items = [i for i in s["items"] if i["ref"] in in_scope]
+            if s["type"] == "pdf":
+                pages += len(items)
+            elif s["type"] == "image":
+                pictures += len(items)
+            else:
+                words += sum(i["words"] for i in items)
+        parts = [f"{pages} pages"] * bool(pages) + [f"{words} words of text"] * bool(words) + \
+            [f"{pictures} pictures"] * bool(pictures)
+        return pages + pictures + words / 150, ", ".join(parts)
+
     # ------------------------------------------------------------------ for the agent
     def overview(self, focus=None):
         """Listing of the material in scope: one line per page/section/picture."""

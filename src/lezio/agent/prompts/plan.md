@@ -12,7 +12,8 @@ TASK: plan the lesson.
       idea of its scene$style_field};
    - skipped: [{"ref", "reason"}] for the material in scope that no segment covers (live polls or quizzes,
      repeated or empty pages, minor details at depth 4, whatever the user's instructions exclude).
-Every page and section in scope must be in the sources of some segment or in skipped. The first segment
+Every segment cites its sources (a recap cites what it sums up). Every page and section in scope must be
+in the sources of some segment or in skipped. The first segment
 opens the lesson (welcome, what it is about); the last one closes it with a short recap. Follow the depth
 for the length. Titles, goals and visual ideas are given to whoever writes the segments: make them
 specific.
