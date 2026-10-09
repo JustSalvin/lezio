@@ -11,7 +11,7 @@ $templates
 CUSTOM ANIMATIONS - only when no template fits. Submit them as `animation_code` (Python source) with
 submit_script; every function name must start with the prefix "$prefix". Example:
 
-from slidereader.video.anim_api import *   # Manim + house style + helpers
+from lezio.video.anim_api import *   # Manim + house style + helpers
 
 def ${prefix}segment_decay(scene, steps):        # used as {"anim": "${prefix}segment_decay", "steps": [s1, s2]}
     t = steps()                                    # step 1 starts: its audio plays now

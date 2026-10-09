@@ -38,7 +38,7 @@ class LessonScene(Scene):
                 return str(wav), durations[key]["duration"]
             if fake:
                 return None, float(fake)
-            raise SystemExit(f"Missing audio for {key}: run ./sr audio {lesson.id}")
+            raise SystemExit(f"Missing audio for {key}: run ./lezio audio {lesson.id}")
 
         lines = load_lines(lesson)
         W, H = lines["page_size"]

@@ -1,7 +1,7 @@
 """Common interface of the text-to-speech engines.
 
 An engine declares its own options (with defaults, allowed values and help), so the program can
-validate them, show them (`./sr tts`) and pass them back to the engine, without knowing anything
+validate them, show them (`./lezio tts`) and pass them back to the engine, without knowing anything
 about the engine itself. Module-level code must stay light: heavy libraries are imported in prepare().
 """
 from dataclasses import dataclass, field

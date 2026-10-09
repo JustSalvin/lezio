@@ -73,7 +73,7 @@ def build(a):
     settings, slides = load_script(lesson.script)
     errors = validate(lesson, settings, slides)[0]
     if errors:
-        ui.fail("the script has errors: " + "; ".join(errors[:3]), f"./sr check {lesson.id}")
+        ui.fail("the script has errors: " + "; ".join(errors[:3]), f"./lezio check {lesson.id}")
     build_voice(lesson)
     build_video(lesson)
     run = Run(Namespace(yes=True, note=""))
@@ -101,7 +101,7 @@ def tts(a):
             rows.append(("voices", ", ".join(engine.suggested_voices)))
         ui.console.print()
         ui.key_values(rows, title=escape(f"{name} · values from config.toml [tts.{name}]"))
-        ui.info(f'try:    ./sr tts --try "Ciao a tutti, iniziamo." --engine {name} --voice X --set key=value --play')
+        ui.info(f'try:    ./lezio tts --try "Ciao a tutti, iniziamo." --engine {name} --voice X --set key=value --play')
         ui.info(escape(f"use it: set [tts] engine and [tts.{name}] in config.toml"))
         return
     problems = engine.validate({k: v for k, v in overrides.items() if k != "engine"})

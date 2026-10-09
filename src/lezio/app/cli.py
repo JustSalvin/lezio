@@ -1,14 +1,14 @@
-"""Command line: ./sr [pdf | lesson] [options], plus a few other commands."""
+"""Command line: ./lezio [pdf | lesson] [options], plus a few other commands."""
 import argparse
 import sys
 
 from ..settings import DEPTHS, VISUAL_MODES
 from . import commands, ui
 
-HELP = """[bold]slide-reader[/] [muted]· PDF slides → narrated, animated video lecture[/]
+HELP = """[bold]lezio[/] [muted]· PDF slides → narrated, animated video lecture[/]
 
-  [accent]./sr[/]                             wizard: choose a PDF or a lesson, then the options
-  [accent]./sr[/] <file.pdf | lesson> [...]   make or update a video (asks only what is missing)
+  [accent]./lezio[/]                             wizard: choose a PDF or a lesson, then the options
+  [accent]./lezio[/] <file.pdf | lesson> [...]   make or update a video (asks only what is missing)
 
 [bold]Options[/] [muted](per-video choices, saved in the lesson)[/]
   --pages 1-20          pages to cover (default: all)
@@ -21,26 +21,26 @@ HELP = """[bold]slide-reader[/] [muted]· PDF slides → narrated, animated vide
   -y, --yes             no questions, no confirmation
 
 [bold]Other commands[/]
-  ./sr status <lesson>                          what is done, missing or outdated
-  ./sr redo <lesson> --slides 7 [--part script|voice|video] [--note "add an example"]
-  ./sr build <lesson>                           rebuild after editing lessons/<lesson>/script.json
-  ./sr tts                                      voices and TTS options;  --try "text" to listen
-  ./sr help tools                               low-level commands
+  ./lezio status <lesson>                          what is done, missing or outdated
+  ./lezio redo <lesson> --slides 7 [--part script|voice|video] [--note "add an example"]
+  ./lezio build <lesson>                           rebuild after editing lessons/<lesson>/script.json
+  ./lezio tts                                      voices and TTS options;  --try "text" to listen
+  ./lezio help tools                               low-level commands
 
 [muted]Configuration (voice, language, agent model, video quality) is in config.toml.[/]"""
 
 TOOLS_HELP = """[bold]Low-level commands[/] [muted](the program runs them for you)[/]
-  ./sr check <lesson>                       validate the script
-  ./sr init <pdf> [--id NAME]               analyse a PDF (slide images, text lines)
-  ./sr audio <lesson>                       generate missing narration audio
-  ./sr render <lesson> [--slides 3-5] [--preview]   render slides (contact sheets in build/qa)
-  ./sr anim <lesson> --all | --slide N [--beat K]   render animations alone + contact sheets
-  ./sr join <lesson>                        assemble output/<lesson>.mp4
-  ./sr templates                            animation templates and their arguments"""
+  ./lezio check <lesson>                       validate the script
+  ./lezio init <pdf> [--id NAME]               analyse a PDF (slide images, text lines)
+  ./lezio audio <lesson>                       generate missing narration audio
+  ./lezio render <lesson> [--slides 3-5] [--preview]   render slides (contact sheets in build/qa)
+  ./lezio anim <lesson> --all | --slide N [--beat K]   render animations alone + contact sheets
+  ./lezio join <lesson>                        assemble output/<lesson>.mp4
+  ./lezio templates                            animation templates and their arguments"""
 
 
 def main_parser():
-    p = argparse.ArgumentParser(prog="./sr", add_help=False)
+    p = argparse.ArgumentParser(prog="./lezio", add_help=False)
     p.add_argument("target", nargs="?")
     p.add_argument("--pages")
     p.add_argument("--visual", choices=list(VISUAL_MODES))
@@ -54,7 +54,7 @@ def main_parser():
 
 
 def sub_parser():
-    ap = argparse.ArgumentParser(prog="./sr")
+    ap = argparse.ArgumentParser(prog="./lezio")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def add(name, fn, *args):

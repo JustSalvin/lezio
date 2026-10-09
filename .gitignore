@@ -1,8 +1,9 @@
 .venv/
 .venv-tts/
 lessons/*/build/
+archive/*/*/build/
 output/
-input/*.pdf
+input/*
 __pycache__/
 .DS_Store
 voice-samples/

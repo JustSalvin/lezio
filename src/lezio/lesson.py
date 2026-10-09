@@ -31,7 +31,7 @@ class Lesson:
         self.id = lesson_id
         self.dir = LESSONS / lesson_id
         if not lesson_exists(lesson_id):
-            raise SystemExit(f"Unknown lesson '{lesson_id}'. Start it with: ./sr input/<file>.pdf")
+            raise SystemExit(f"Unknown lesson '{lesson_id}'. Start it with: ./lezio input/<file>.pdf")
         self.pdf = ROOT / json.loads((self.dir / "lesson.json").read_text())["pdf"]
         self.script = self.dir / "script.json"
         self.animations_dir = self.dir / "animations"

@@ -1,9 +1,11 @@
-# Video environment (.venv): slide extraction, animation, encoding
+# Program and video environment (.venv): material ingestion, scenes, encoding, LLM tasks, terminal UI
 manim==0.22.0
 pymupdf==1.28.2
+python-docx==1.2.0
 imageio-ffmpeg==0.6.0
 numpy==2.5.3
 pillow==12.3.0
 claude-agent-sdk==0.2.165
 questionary==2.1.1
 rich==15.0.0
+tomlkit==0.15.1

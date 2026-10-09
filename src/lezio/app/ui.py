@@ -20,7 +20,7 @@ console = Console(theme=THEME, highlight=False)
 
 
 def banner():
-    console.print(Panel.fit("[bold]slide-reader[/]  [muted]PDF slides → narrated video lecture[/]",
+    console.print(Panel.fit("[bold]lezio[/]  [muted]PDF slides → narrated video lecture[/]",
                             border_style="accent", padding=(0, 2)))
 
 

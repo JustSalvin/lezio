@@ -59,9 +59,9 @@ class Run:
                 return str(path), a.id or slugify(path.stem)
             if lesson_exists(a.target):
                 return None, a.target
-            ui.fail(f"'{a.target}' is neither a PDF nor an existing lesson", "see ./sr --help")
+            ui.fail(f"'{a.target}' is neither a PDF nor an existing lesson", "see ./lezio --help")
         if not self.interactive:
-            ui.fail("tell me which PDF or lesson", "./sr <file.pdf | lesson>   (see ./sr --help)")
+            ui.fail("tell me which PDF or lesson", "./lezio <file.pdf | lesson>   (see ./lezio --help)")
         lessons = []
         for lid in all_lessons():
             saved = json.loads((Lesson(lid).script).read_text())
@@ -70,7 +70,7 @@ class Run:
                                  f"{s.get('visual', '?')} · depth {s.get('depth', '?')} · {n} slides"))
         pdfs = [(str(p), p.name) for p in sorted(INPUT.glob("*.pdf"))]
         if not lessons and not pdfs:
-            ui.fail("no PDF in input/", "put a PDF in input/ or run ./sr <file.pdf>")
+            ui.fail("no PDF in input/", "put a PDF in input/ or run ./lezio <file.pdf>")
         kind, value = wizard.choose_target(lessons, pdfs)
         if kind == "lesson":
             return None, value
@@ -128,7 +128,7 @@ class Run:
         tts = tts_options()
         problems = engines.get_engine(tts["engine"]).validate({k: v for k, v in tts.items() if k != "engine"})
         if problems:
-            ui.fail("config.toml [tts]: " + "; ".join(problems), "see ./sr tts")
+            ui.fail("config.toml [tts]: " + "; ".join(problems), "see ./lezio tts")
 
     # ================================================================ summary
     def summary(self):
@@ -159,7 +159,7 @@ class Run:
                 ("estimate", f"{low:.0f}-{high:.0f} min of video  [muted]→ output/{self.lesson_id}.mp4[/]")]
         if in_scope and s["instructions"] != self.old_instructions:
             rows.append(("note", "[muted]new instructions apply to slides written from now on "
-                                 "(use rewrite or ./sr redo for the others)[/]"))
+                                 "(use rewrite or ./lezio redo for the others)[/]"))
         ui.console.print()
         ui.key_values(rows, title="summary")
         destructive = (self.rewrite and self.existing) or removed
@@ -271,7 +271,7 @@ class Run:
             st.done(f"{len(self.scope)} pages" + (f" · skipping {ui.fmt_pages(skipped)}" if skipped else ""))
         self.show_plan()
         if self.interactive and not wizard.confirm("Continue with this plan?"):
-            ui.info(f"Stopped. You can edit {rel(self.lesson.agent / 'plan.json')} and run ./sr again.")
+            ui.info(f"Stopped. You can edit {rel(self.lesson.agent / 'plan.json')} and run ./lezio again.")
             raise SystemExit(0)
 
     def show_plan(self):
@@ -325,7 +325,7 @@ class Run:
             st.done(f"{len(todo)} slides · {anims} animations")
         errors = validate(self.lesson, self.settings, self.save_script())[0]
         if errors:
-            ui.fail("the script has errors: " + "; ".join(errors[:3]), f"./sr check {self.lesson.id}")
+            ui.fail("the script has errors: " + "; ".join(errors[:3]), f"./lezio check {self.lesson.id}")
 
     def context(self, items, plan):
         first, last = items[0]["slide"], items[-1]["slide"]
@@ -374,7 +374,7 @@ class Run:
         settings, slides = load_script(self.lesson.script)
         errors = validate(self.lesson, settings, slides)[0]
         if errors:
-            ui.fail("the script has errors: " + "; ".join(errors[:3]), f"./sr check {self.lesson.id}")
+            ui.fail("the script has errors: " + "; ".join(errors[:3]), f"./lezio check {self.lesson.id}")
         build_voice(self.lesson)
         rendered = build_video(self.lesson)
         if rendered and review and not self.a.no_review:
@@ -475,7 +475,7 @@ def make(a):
 
 
 def redo(a):
-    """./sr redo <lesson> --slides 7,9 [--part script|voice|video] [--note "..."]"""
+    """./lezio redo <lesson> --slides 7,9 [--part script|voice|video] [--note "..."]"""
     a.target, a.rewrite, a.pages, a.visual, a.depth, a.instructions, a.id = a.lesson, False, None, None, None, None, None
     yes, a.yes = a.yes, True
     run = Run(a)

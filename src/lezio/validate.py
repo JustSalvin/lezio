@@ -1,4 +1,4 @@
-"""Script validation, shared by `./sr check` and by the program while it collects the agent's work."""
+"""Script validation, shared by `./lezio check` and by the program while it collects the agent's work."""
 import importlib.util
 import inspect
 import re

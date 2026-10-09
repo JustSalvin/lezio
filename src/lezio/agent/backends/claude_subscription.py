@@ -57,13 +57,13 @@ class ClaudeSubscription(Backend):
                 return {"content": content, "is_error": result.error}
             return handler
 
-        server = create_sdk_mcp_server(name="slidereader", version="1.0.0", tools=[wrap(t) for t in task.tools])
+        server = create_sdk_mcp_server(name="lezio", version="1.0.0", tools=[wrap(t) for t in task.tools])
         options = ClaudeAgentOptions(
             system_prompt=task.system,
             tools=[],                         # no built-in tools at all
-            mcp_servers={"slidereader": server},
+            mcp_servers={"lezio": server},
             strict_mcp_config=True,
-            allowed_tools=[f"mcp__slidereader__{t.name}" for t in task.tools],
+            allowed_tools=[f"mcp__lezio__{t.name}" for t in task.tools],
             setting_sources=[],               # do not load CLAUDE.md/AGENTS.md, settings, hooks, skills
             max_turns=task.max_turns,
             model=task.model or None,
@@ -86,7 +86,7 @@ class ClaudeSubscription(Backend):
                                 outcome.text = block.text.strip()
                                 write_log("text", outcome.text)
                             elif isinstance(block, ToolUseBlock):
-                                name = block.name.replace("mcp__slidereader__", "")
+                                name = block.name.replace("mcp__lezio__", "")
                                 write_log("tool_use", {"tool": name, "input": block.input})
                                 notify("tool", (name, block.input))
                     elif isinstance(message, ResultMessage):

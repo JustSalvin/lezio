@@ -10,7 +10,7 @@ class VoiceError(Exception):
 
 
 def _run(args, on_event=None, log=None):
-    proc = subprocess.Popen([str(VOICE_PY), "-m", "slidereader.voice.synthesize", *args], cwd=ROOT, env=ENV,
+    proc = subprocess.Popen([str(VOICE_PY), "-m", "lezio.voice.synthesize", *args], cwd=ROOT, env=ENV,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     error, last = None, []
     with open(log, "a") if log else open("/dev/null", "w") as fh:

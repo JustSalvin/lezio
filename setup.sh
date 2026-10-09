@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time installation of slide-reader (macOS on Apple Silicon).
+# One-time installation of lezio (macOS on Apple Silicon).
 # Creates two virtual environments inside the project and downloads the speech model.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
@@ -7,7 +7,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 say() { printf "\n==> %s\n" "$*"; }
 
 if [[ "$(uname -s)" != "Darwin" || "$(uname -m)" != "arm64" ]]; then
-  echo "slide-reader needs macOS on Apple Silicon (the speech model runs with MLX)." >&2
+  echo "lezio needs macOS on Apple Silicon (the speech model runs with MLX)." >&2
   exit 1
 fi
 
@@ -30,7 +30,7 @@ fi
 brew list cairo >/dev/null 2>&1 || brew install cairo
 brew list pkgconf >/dev/null 2>&1 || brew install pkgconf
 
-say "Video environment (.venv)"
+say "Program and video environment (.venv)"
 [ -d .venv ] || $PY -m venv .venv
 .venv/bin/pip install -q --upgrade pip
 .venv/bin/pip install -q -r requirements-video.txt
@@ -43,7 +43,7 @@ say "Speech environment (.venv-tts)"
 .venv-tts/bin/pip install -q -r requirements-tts.txt
 
 say "Speech model of the configured TTS engine (downloaded once, e.g. into ~/.cache/huggingface)"
-PYTHONPATH="$PWD" .venv-tts/bin/python -m slidereader.voice.synthesize download
+PYTHONPATH="$PWD/src" .venv-tts/bin/python -m lezio.voice.synthesize download
 
 mkdir -p input output lessons
-say "Done. Put a PDF in input/ and run ./sr"
+say "Done. Put your study material in input/ and run ./lezio"
