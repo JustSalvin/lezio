@@ -1,0 +1,6 @@
+# Video environment (.venv): slide extraction, animation, encoding
+manim==0.22.0
+pymupdf==1.28.2
+imageio-ffmpeg==0.6.0
+numpy==2.5.3
+pillow==12.3.0

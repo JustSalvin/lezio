@@ -1,0 +1,7 @@
+# Speech environment (.venv-tts): local text-to-speech with MLX (Apple Silicon only)
+mlx==0.32.3
+mlx-audio==0.5.8
+mistral-common[audio]==1.12.0
+soundfile==0.14.0
+numpy==2.5.3
+huggingface_hub==2.2.0

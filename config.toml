@@ -1,0 +1,51 @@
+# slide-reader global configuration.
+# A lesson script (scripts/<lesson>.json) can override voice, temperature, beat_gap and skip
+# in its "settings" object.
+
+[tts]
+# Text-to-speech model (runs locally with MLX on Apple Silicon)
+model = "mlx-community/Voxtral-4B-TTS-2603-mlx-6bit"
+# Voxtral voice presets: it_male, it_female, fr_male, fr_female, es_male, es_female, de_male,
+# de_female, pt_male, pt_female, nl_male, nl_female, hi_male, hi_female, ar_male,
+# casual_male, casual_female, cheerful_female, neutral_male, neutral_female (English)
+voice = "it_male"
+# Lower = steadier and flatter, higher = more expressive (and more variable)
+temperature = 0.8
+
+[narration]
+# Language of the spoken narration and of the on-screen animation texts
+language = "Italian"
+# Visual mode:  "slides"   = original slides with synced highlights only
+#               "mixed"    = slides + full-screen explanation animations (default)
+#               "animated" = animations only; slides are the source but are never shown
+visual = "mixed"
+# Script depth: 1 = extensive (reads everything and goes deeper, examples, analogies)
+#               2 = faithful  (everything on the slide, nothing added, nothing cut)
+#               3 = condensed (main points, a little summarized)
+#               4 = short     (very concise, short-video style)
+depth = 1
+# Seconds of silence between two spoken beats
+beat_gap = 0.35
+
+[video]
+width = 1920
+height = 1080
+fps = 30
+# Slides rendered in parallel
+parallel_jobs = 4
+# Pixel width of the slide images embedded in the video (higher = sharper slow zoom)
+slide_image_width = 2700
+# Pixel width of the slide previews the agent looks at
+preview_image_width = 1280
+# Height of the optional lightweight copy of the final video (./sr join --small)
+small_height = 720
+
+[agent]
+# Who writes the script when you run ./sr make:
+#   "claude-code" = Claude Code CLI in headless mode, using your Claude login (subscription)
+#   "anthropic-api" = Anthropic API key (planned, not implemented yet)
+backend = "claude-code"
+# Model for the agent ("" = Claude Code default)
+model = ""
+# After the final render, let the agent look at the frames and fix layout problems (one pass)
+review = true

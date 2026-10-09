@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# slide-reader command line. Run ./sr --help for the list of commands.
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ ! -x "$DIR/.venv/bin/python" ]; then
+  echo "Environment not installed. Run ./setup.sh first." >&2
+  exit 1
+fi
+PYTHONPATH="$DIR" exec "$DIR/.venv/bin/python" -m slidereader.cli "$@"

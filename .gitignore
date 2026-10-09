@@ -1,0 +1,8 @@
+.venv/
+.venv-tts/
+build/
+output/
+input/*.pdf
+__pycache__/
+.DS_Store
+voice-samples/
