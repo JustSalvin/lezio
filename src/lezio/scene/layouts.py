@@ -1,26 +1,41 @@
-"""Ready-made animations, configured only through data (the "args" of an anim beat).
+"""Optional ready-made layouts. Use them when they fit; write your own scene code when they do not.
 
-Every template spreads its phases over the narration steps it receives:
-with as many steps as phases each phase starts with its own sentence; with fewer steps the
-phases are spaced out inside the available steps. All visible strings come from the args,
-so templates work in any language.
-
-Coordinate system (for `diagram`): x from -7 (left) to 7 (right), y from -4 (bottom) to 4 (top).
-Keep content within x in [-6.5, 6.5] and y in [-3.5, 3.2].
+Every layout is called as `name(scene, steps, ...)`: it shows its content over the narration pieces it is
+given and returns a Group of what it put on screen (fade it out when you move on). Give it the pieces it
+must use with steps.take(n) - e.g. bullets(scene, steps.take(4), title, items) uses the next 4 pieces, one
+phase per piece; with fewer pieces than phases the phases are spaced out inside them. Given `steps`
+itself, a layout uses all the remaining pieces. All visible texts come from the arguments.
 """
-from .anim_api import *  # noqa: F401,F403
-from .anim_api import (BLUE, BLUE_LIGHT, DARK, GREEN, GREEN_LIGHT, GREY, MONO, ORANGE, ORANGE_LIGHT,
-                       RED, YELLOW, YELLOW_LIGHT, T, arrow, box, check, cross, wrap)
+import functools
+
+from manim import (DOWN, LEFT, RIGHT, UL, UP, WHITE, Brace, Circle, Create, FadeIn, FadeOut, GrowArrow,
+                   GrowFromCenter, Group, Indicate, LaggedStart, Line, RoundedRectangle, Square, VGroup,
+                   Write)
+
+from .style import (BLUE, BLUE_LIGHT, DARK, GREEN, GREEN_LIGHT, GREY, GREY_LIGHT, MONO, ORANGE, ORANGE_LIGHT,
+                    RED, RED_LIGHT, YELLOW, YELLOW_LIGHT, T, arrow, box, check, cross, wrap)
 
 COLORS = {
     "blue": (BLUE, BLUE_LIGHT), "orange": (ORANGE, ORANGE_LIGHT), "green": (GREEN, GREEN_LIGHT),
-    "yellow": ("#B58900", YELLOW_LIGHT), "grey": (GREY, "#F2F2F2"), "red": (RED, "#FDE2E2"),
+    "yellow": ("#B58900", YELLOW_LIGHT), "grey": (GREY, GREY_LIGHT), "red": (RED, RED_LIGHT),
 }
 
 
+def layout(fn):
+    """Make a layout return a Group of the mobjects it added to the scene."""
+    @functools.wraps(fn)
+    def run(scene, steps, *args, **kwargs):
+        before = {id(m) for m in scene.mobjects}
+        fn(scene, steps, *args, **kwargs)
+        return Group(*[m for m in scene.mobjects if id(m) not in before])
+    return run
+
+
 def run_phases(steps, phases):
-    """Distribute phase callables (each takes a Timer) over the available narration steps."""
-    n_steps, n_ph = len(steps), len(phases)
+    """Distribute phase callables (each takes a Timer) over the narration pieces left in `steps`."""
+    n_steps, n_ph = steps.left, len(phases)
+    if n_steps < 1:
+        raise RuntimeError("no narration pieces left for this layout")
     groups = [[] for _ in range(n_steps)]
     for i, ph in enumerate(phases):
         groups[min(i * n_steps // n_ph, n_steps - 1)].append(ph)
@@ -37,6 +52,7 @@ def _title(text):
 
 
 # ---------------------------------------------------------------- flow
+@layout
 def flow(scene, steps, items, title=None, above=None, below=None):
     """Chain of boxes linked by arrows, revealed left to right (a process, an evolution, a recap).
 
@@ -71,6 +87,7 @@ def flow(scene, steps, items, title=None, above=None, below=None):
 
 
 # ---------------------------------------------------------------- mapping
+@layout
 def mapping(scene, steps, pairs, left_title=None, right_title=None):
     """Rows "left -> right" revealed one by one (definition -> property, cause -> effect).
 
@@ -103,6 +120,7 @@ def mapping(scene, steps, pairs, left_title=None, right_title=None):
 
 
 # ---------------------------------------------------------------- cards
+@layout
 def cards(scene, steps, cards, pick, prompt=None):
     """A set of possible options (cards), then one gets selected (a choice among possibilities).
 
@@ -148,6 +166,7 @@ def _code_mobject(code):
     return T(code, 64, DARK, bold=True, font=MONO)
 
 
+@layout
 def encode(scene, steps, items, encode_label, decode_label=None):
     """Symbols -> codes (and optionally codes -> symbols again): encoding and decoding.
 
@@ -177,6 +196,7 @@ def encode(scene, steps, items, encode_label, decode_label=None):
 
 
 # ---------------------------------------------------------------- translate
+@layout
 def translate(scene, steps, source, via, result, source_note=None, source_brace=None, result_brace=None):
     """Source -> translator box -> result (compiling, converting, any transformation).
 
@@ -216,6 +236,7 @@ def translate(scene, steps, source, via, result, source_note=None, source_brace=
 
 
 # ---------------------------------------------------------------- number_base
+@layout
 def number_base(scene, steps, number, base=2, caption=None, claim=None):
     """A decimal number and its representation in another base, with positional weights and sum.
 
@@ -265,6 +286,7 @@ def number_base(scene, steps, number, base=2, caption=None, claim=None):
 
 
 # ---------------------------------------------------------------- statement
+@layout
 def statement(scene, steps, lines, title=None):
     """Big centered sentences appearing one per phase (key definitions, take-home messages).
 
@@ -289,6 +311,7 @@ def statement(scene, steps, lines, title=None):
 
 
 # ---------------------------------------------------------------- bullets / title (animated mode)
+@layout
 def bullets(scene, steps, title, items, focus=None):
     """A title and bullet points revealed one per phase - replaces a text slide in "animated" mode.
 
@@ -321,6 +344,7 @@ def bullets(scene, steps, title, items, focus=None):
     run_phases(steps, [phase(i) for i in range(len(items))])
 
 
+@layout
 def title_card(scene, steps, title, subtitle=None):
     """Full-screen title (lesson opening, section change). Phases: title, subtitle."""
     head = T(wrap(title, 30), 64, BLUE, bold=True).move_to(UP * 0.4)
@@ -338,6 +362,7 @@ def title_card(scene, steps, title, subtitle=None):
 
 
 # ---------------------------------------------------------------- compare
+@layout
 def compare(scene, steps, left_title, left_items, right_title, right_items, left_verdict=None, right_verdict=None):
     """Two columns side by side (before/after, A vs B, good vs bad).
 
@@ -372,6 +397,7 @@ def compare(scene, steps, left_title, left_items, right_title, right_items, left
 
 
 # ---------------------------------------------------------------- diagram
+@layout
 def diagram(scene, steps, nodes, edges=(), reveal=None, title=None):
     """General boxes-and-arrows diagram, revealed piece by piece (architectures, data flows, actors).
 
@@ -424,5 +450,65 @@ def _edge_points(a, b):
     return (a.get_top(), b.get_bottom()) if dy > 0 else (a.get_bottom(), b.get_top())
 
 
-TEMPLATES = {f.__name__: f for f in (bullets, title_card, flow, mapping, cards, encode, translate, number_base,
-                                     statement, compare, diagram)}
+# ---------------------------------------------------------------- original pages
+@layout
+def page_walkthrough(scene, steps, material, ref, marks, zoom=False):
+    """An original PDF page on screen, with a highlight frame following the narration.
+
+    ref: a page ref ("slides.pdf#p3").  marks: one entry per narration piece used - a lines spec
+    (3, [3, 5], {"lines": [2, 4]}, "phrase") or None for no highlight during that piece.
+    zoom: slow zoom on the page while talking (picture pages, section dividers).
+    """
+    from manim import ReplacementTransform, linear
+    page = material.page(ref)
+    if len(marks) != steps.left:
+        raise ValueError(f"page_walkthrough: {len(marks)} marks for {steps.left} narration pieces")
+    frame = None
+    for k, spec in enumerate(marks):
+        t = steps()
+        if k == 0:
+            t.play(FadeIn(page), rt=0.4)
+        if spec is not None:
+            new = page.mark(spec)
+            t.play(Create(new) if frame is None else ReplacementTransform(frame, new), rt=0.5)
+            frame = new
+        elif frame is not None:
+            t.play(FadeOut(frame), rt=0.3)
+            frame = None
+        if zoom and t.left > 0.2:
+            group = Group(page, frame) if frame is not None else page
+            t.play(group.animate.scale(1 + 0.006 * t.duration), rt=t.left, rate_func=linear)
+
+
+# ---------------------------------------------------------------- review
+def countdown(t, seconds=None, at=None, color=ORANGE):
+    """A visible countdown during the silent pause after the current piece (time to think).
+
+    Waits for the end of the speech of `t`, then counts down for t.pause seconds (or `seconds`), then
+    disappears. at: position of the countdown (default: bottom right corner).
+    """
+    from manim import TAU, Arc, Transform, linear
+    total = seconds if seconds is not None else t.pause_left
+    t.finish()
+    if total < 1:
+        return
+    scene, n = t.scene, max(int(round(total - 0.4)), 1)
+    center = at if at is not None else [5.7, -2.9, 0]
+    ring = Circle(radius=0.55, stroke_color="#D9D9D9", stroke_width=10).move_to(center)
+    arc = Arc(radius=0.55, start_angle=TAU / 4, angle=TAU, stroke_color=color, stroke_width=10).move_arc_center_to(center)
+    num = T(str(n), 44, color, bold=True).move_to(center)
+    scene.play(FadeIn(ring), FadeIn(arc), FadeIn(num), run_time=0.2)
+    each = (total - 0.4) / n
+    for i in range(n):
+        left = TAU * (n - i - 1) / n
+        target = Arc(radius=0.55, start_angle=TAU / 4, angle=max(left, 0.001), stroke_color=color,
+                     stroke_width=10 if left > 0 else 0).move_arc_center_to(center)
+        scene.play(Transform(arc, target), run_time=each, rate_func=linear)
+        if i < n - 1:
+            num.become(T(str(n - i - 1), 44, color, bold=True).move_to(center))
+    scene.play(FadeOut(ring), FadeOut(arc), FadeOut(num), run_time=0.2)
+    t.pause_left = max(t.pause_left - total, 0)
+
+
+LAYOUTS = {f.__name__: f for f in (title_card, bullets, statement, flow, mapping, compare, cards, diagram, encode,
+                                   translate, number_base, page_walkthrough)}

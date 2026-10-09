@@ -1,21 +1,26 @@
-"""Rendering: slide videos (Manim), animation previews, contact sheets, change detection, final join.
+"""Rendering: segment videos (Manim), previews of submissions, step sheets, change detection, final join.
 
-Manim's working files are deleted as soon as a render is copied out, so build/ only keeps what is needed.
+A step sheet shows, for every narration piece, the frame in its middle and the frame at its end, with the
+start of the sentence: it is what the agent looks at to judge a scene. Manim's working files are deleted
+as soon as a render is copied out, so build/ only keeps what is needed.
 """
 import hashlib
 import json
-import math
 import re
 import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ..config import CONFIG, FFMPEG, MANIM, OUTPUT, PACKAGE, ROOT, SUBPROCESS_ENV as ENV
-from ..script import audio_pieces, load_script
+from ..config import CONFIG, FFMPEG, MANIM, OUTPUT, PACKAGE, SUBPROCESS_ENV as ENV
+from ..script import find_segment, load_script, pieces, scene_name
+
+PREVIEW_FPS = 15                   # manim -ql
 
 
 class RenderError(Exception):
-    pass
+    def __init__(self, message, report=None):
+        super().__init__(message)
+        self.report = report or {}
 
 
 def video_duration(path):
@@ -24,142 +29,223 @@ def video_duration(path):
     return int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3]) if m else 0.0
 
 
-def contact_sheet(video, png, frames=16):
-    """Grid of frames sampled evenly from a video (used for visual checks)."""
-    png.parent.mkdir(parents=True, exist_ok=True)
-    every = max(video_duration(video) / frames, 0.5)
-    subprocess.run([str(FFMPEG), "-y", "-loglevel", "error", "-i", str(video), "-vf",
-                    f"fps=1/{every:.3f},scale=480:-1,tile=4x{math.ceil(frames / 4)}:padding=4:color=gray",
-                    "-frames:v", "1", str(png)], check=True)
+def has_audio(path):
+    out = subprocess.run([str(FFMPEG), "-i", str(path)], capture_output=True, text=True).stderr
+    return "Audio:" in out
+
+
+# ------------------------------------------------------------------ step sheets
+def step_sheet(mp4, report, png, fps, width=1440):
+    """Frames in the middle and at the end of every narration piece, two pieces per row, with captions."""
+    from PIL import Image, ImageDraw, ImageFont
+    infos = [p for p in report.get("pieces", []) if "end" in p]
+    if not infos:
+        return None
+    times = []
+    for p in infos:
+        times += [(p["start"] + p["end"]) / 2, max(p["end"] - 0.05, p["start"])]
+    numbers = [max(int(t * fps), 0) for t in times]
+    tmp = png.parent / f".{png.stem}_frames"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    expr = "+".join(f"eq(n\\,{n})" for n in sorted(set(numbers)))
+    subprocess.run([str(FFMPEG), "-y", "-loglevel", "error", "-i", str(mp4), "-vf", f"select={expr},scale=480:-1",
+                    "-fps_mode", "passthrough", str(tmp / "f%04d.jpg")], check=True)
+    files = sorted(tmp.glob("f*.jpg"))
+    by_number = dict(zip(sorted(set(numbers)), files))
+    cell_w = (width - 5 * 6) // 4
+    cell_h = round(cell_w * 9 / 16)
+    cap_h = 22
+    rows = (len(infos) + 1) // 2
+    sheet = Image.new("RGB", (width, rows * (cell_h + cap_h + 8) + 6), (70, 70, 70))
+    draw = ImageDraw.Draw(sheet)
+    try:
+        font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 14)
+    except OSError:
+        font = ImageFont.load_default()
+    for k, p in enumerate(infos):
+        x = 6 + (k % 2) * 2 * (cell_w + 6)
+        y = 6 + (k // 2) * (cell_h + cap_h + 8)
+        words = p["say"].split()
+        who = "" if p["speaker"] == "teacher" else f"{p['speaker']}: "
+        caption = f"piece {p['index']} · {who}{' '.join(words[:12])}" + ("…" if len(words) > 12 else "")
+        while draw.textlength(caption, font=font) > 2 * cell_w and len(caption) > 10:
+            caption = caption[:-2] + "…" if not caption.endswith("…") else caption[:-3] + "…"
+        draw.text((x, y + 2), caption, fill=(235, 235, 235), font=font)
+        for j in range(2):
+            f = by_number.get(numbers[2 * k + j])
+            if f is not None:
+                im = Image.open(f).convert("RGB").resize((cell_w, cell_h))
+                sheet.paste(im, (x + j * (cell_w + 6), y + cap_h))
+    sheet.save(png)
+    shutil.rmtree(tmp, ignore_errors=True)
     return png
 
 
 # ------------------------------------------------------------------ change detection
-def fingerprint(lesson, settings, slide):
-    """Hash of everything that affects a slide's video: script entry, audio, animations, rendering code."""
-    from ..validate import animation_files
-    h = hashlib.sha1(json.dumps(slide, sort_keys=True, ensure_ascii=False).encode())
-    h.update(f"{settings['visual']}|{settings['beat_gap']}".encode())
-    meta = lesson.durations_meta()
-    for k, _, _ in audio_pieces([slide]):
-        h.update(f"{k}:{meta.get(k, {}).get('duration')}".encode())
-    code = [PACKAGE / "video" / f for f in ("scene.py", "templates.py", "anim_api.py")]
-    for f in code + animation_files(lesson):
+def runtime_code():
+    files = sorted((PACKAGE / "scene").glob("*.py")) + [PACKAGE / "video" / "scene_runner.py",
+                                                         PACKAGE / "material" / "__init__.py"]
+    h = hashlib.sha1()
+    for f in files:
         h.update(f.read_bytes())
     return h.hexdigest()
 
 
-def is_outdated(lesson, settings, slide):
-    meta = lesson.video / f"slide_{slide['slide']:02d}.json"
-    if not lesson.slide_video(slide["slide"]).exists() or not meta.exists():
-        return True
-    return json.loads(meta.read_text()).get("fingerprint") != fingerprint(lesson, settings, slide)
-
-
-def missing_audio(lesson, slides):
+def fingerprint(lesson, script, segment):
+    """Hash of everything that affects a segment's video: entry, audio, scene code, runtime, material."""
+    s = script["settings"]
+    h = hashlib.sha1(json.dumps(segment, sort_keys=True, ensure_ascii=False).encode())
+    v = CONFIG["video"]
+    h.update(f"{s['style']}|{s['piece_gap']}|{v['width']}x{v['height']}@{v['fps']}".encode())
     meta = lesson.durations_meta()
-    return [k for k, _, _ in audio_pieces(slides) if k not in meta or not (lesson.audio / f"{k}.wav").exists()]
+    for key, _, _, _ in pieces(segment):
+        h.update(f"{key}:{meta.get(key, {}).get('duration')}".encode())
+    path = lesson.scene_file(scene_name(segment))
+    h.update(path.read_bytes() if path.exists() else b"")
+    h.update(runtime_code().encode())
+    if lesson.index.exists():
+        index = json.loads(lesson.index.read_text())
+        h.update("|".join(f"{x['id']}:{x['fingerprint']}:{x['version']}" for x in index["sources"]).encode())
+    return h.hexdigest()
+
+
+def video_meta(lesson, segment_id):
+    path = lesson.video / f"{segment_id}.json"
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def is_outdated(lesson, script, segment):
+    if not lesson.segment_video(segment["id"]).exists():
+        return True
+    return video_meta(lesson, segment["id"]).get("fingerprint") != fingerprint(lesson, script, segment)
+
+
+def missing_audio(lesson, segments):
+    meta = lesson.durations_meta()
+    return [k for k, text, _, _ in (p for s in segments for p in pieces(s))
+            if meta.get(k, {}).get("text") != text or not (lesson.audio / f"{k}.wav").exists()]
 
 
 # ------------------------------------------------------------------ Manim
-def run_manim(lesson, n, final, only_beat=None, fake=None, name=None):
-    """Render one slide (or one animation beat) and return the path of the produced mp4."""
-    name = name or f"slide_{n:02d}"
+def run_scene(lesson, segment_id, final, name, draft=None, estimate=False):
+    """Render one segment and return (mp4 path, report). Raises RenderError with a short message."""
     media = lesson.media / name
     shutil.rmtree(media, ignore_errors=True)
-    env = {**ENV, "SR_LESSON": lesson.id, "SR_SLIDE": str(n)}
-    if only_beat is not None:
-        env["SR_ONLY_BEAT"] = str(only_beat)
-    if fake:
-        env["SR_FAKE_AUDIO"] = str(fake)
+    media.mkdir(parents=True)
+    lesson.qa.mkdir(parents=True, exist_ok=True)
+    report_path = lesson.qa / f"{name}.json"
+    report_path.unlink(missing_ok=True)
+    env = {**ENV, "LEZIO_LESSON": lesson.id, "LEZIO_SEGMENT": segment_id, "LEZIO_REPORT": str(report_path)}
+    if draft:
+        env["LEZIO_DRAFT"] = str(draft)
+    if estimate:
+        env["LEZIO_ESTIMATE"] = "1"
     v = CONFIG["video"]
     quality = ["-r", f"{v['width']},{v['height']}", "--fps", str(v["fps"])] if final else ["-ql"]
     log = lesson.logs / f"{name}.txt"
     log.parent.mkdir(parents=True, exist_ok=True)
     cmd = [str(MANIM), "render", *quality, "--disable_caching", "--media_dir", str(media), "-o", name,
-           str(PACKAGE / "video" / "manim_entry.py"), "LessonScene"]
+           str(PACKAGE / "video" / "manim_entry.py"), "SegmentScene"]
+    timeout = CONFIG["tuning"]["render_timeout_seconds"]
     with open(log, "w") as fh:
-        rc = subprocess.run(cmd, env=env, cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT).returncode
+        try:
+            rc = subprocess.run(cmd, env=env, cwd=media, stdout=fh, stderr=subprocess.STDOUT, timeout=timeout).returncode
+        except subprocess.TimeoutExpired:
+            shutil.rmtree(media, ignore_errors=True)
+            raise RenderError(f"{name}: render stopped after {timeout} s (endless loop or far too many animations?)")
+    report = json.loads(report_path.read_text()) if report_path.exists() else {}
     if rc != 0:
-        lines = [l.strip() for l in log.read_text().splitlines()
-                 if re.search(r"Error|error:|Exit|Missing|unknown|not found", l)]
-        raise RenderError(f"{name}: {' | '.join(lines[-2:]) or 'render failed'} (log: {log.relative_to(ROOT)})")
-    return next(media.glob(f"videos/**/{name}.mp4"))
+        shutil.rmtree(media, ignore_errors=True)
+        lines = [l.strip() for l in log.read_text().splitlines() if re.search(r"Error|error:|Exception", l)]
+        raise RenderError(report.get("error") or " | ".join(lines[-2:]) or f"{name}: render failed (log: {log})",
+                          report)
+    found = list(media.glob(f"videos/**/{name}.mp4"))
+    if not found:
+        raise RenderError(f"{name}: Manim produced no video (log: {log})", report)
+    return found[0], report
 
 
-def render_slides(lesson, numbers, final=True, on_done=None):
-    """Render slides in parallel. on_done(n, seconds) is called as each finishes. Returns rendered numbers."""
-    settings, slides = load_script(lesson.script)
-    by_number = {s["slide"]: s for s in slides}
+def preview(lesson, segment, code):
+    """Render a submission (not saved yet) at low resolution, with estimated timing where the voice does not
+    exist yet. Returns (step sheet or None, report); raises RenderError."""
+    drafts = lesson.agent / "drafts"
+    drafts.mkdir(parents=True, exist_ok=True)
+    code_path = drafts / f"{segment['id']}.py"
+    code_path.write_text(code)
+    draft = drafts / f"{segment['id']}.json"
+    draft.write_text(json.dumps({"segment": segment, "code": str(code_path)}, ensure_ascii=False))
+    name = f"preview_{segment['id']}"
+    mp4, report = run_scene(lesson, segment["id"], final=False, name=name, draft=draft, estimate=True)
+    try:
+        sheet = step_sheet(mp4, report, lesson.qa / f"{name}.png", PREVIEW_FPS)
+        report["seconds"] = round(video_duration(mp4), 1)
+    finally:
+        shutil.rmtree(lesson.media / name, ignore_errors=True)
+    return sheet, report
+
+
+def _ensure_audio(mp4):
+    """Segments without any voice (e.g. tests) get a silent track, so that all segments can be joined."""
+    if has_audio(mp4):
+        return
+    tmp = mp4.with_name(mp4.stem + ".tmp.mp4")
+    subprocess.run([str(FFMPEG), "-y", "-loglevel", "error", "-i", str(mp4), "-f", "lavfi", "-i",
+                    "anullsrc=channel_layout=stereo:sample_rate=48000", "-c:v", "copy", "-c:a", "aac", "-shortest",
+                    str(tmp)], check=True)
+    tmp.replace(mp4)
+
+
+def render_segments(lesson, ids, on_done=None, estimate=False):
+    """Final render of some segments, in parallel. on_done(id, seconds) as each finishes.
+    Returns the ids rendered; raises RenderError listing the failures."""
+    script = load_script(lesson.script)
     lesson.video.mkdir(parents=True, exist_ok=True)
-    kind = "final" if final else "preview"
 
-    def job(n):
-        mp4 = run_manim(lesson, n, final)
-        if final:
-            shutil.copy2(mp4, lesson.slide_video(n))
-            (lesson.video / f"slide_{n:02d}.json").write_text(
-                json.dumps({"fingerprint": fingerprint(lesson, settings, by_number[n])}))
-        contact_sheet(mp4, lesson.qa / f"{kind}_slide_{n:02d}.png")
-        seconds = video_duration(mp4)
-        shutil.rmtree(lesson.media / f"slide_{n:02d}", ignore_errors=True)
-        return n, seconds
+    def job(sid):
+        segment = find_segment(script, sid)
+        mp4, report = run_scene(lesson, sid, final=True, name=sid, estimate=estimate)
+        try:
+            _ensure_audio(mp4)
+            shutil.copy2(mp4, lesson.segment_video(sid))
+            step_sheet(mp4, report, lesson.qa / f"final_{sid}.png", CONFIG["video"]["fps"])
+            seconds = video_duration(mp4)
+        finally:
+            shutil.rmtree(lesson.media / sid, ignore_errors=True)
+        (lesson.video / f"{sid}.json").write_text(json.dumps(
+            {"fingerprint": fingerprint(lesson, script, segment), "seconds": round(seconds, 1),
+             "warnings": report.get("warnings", [])}, ensure_ascii=False, indent=1))
+        return sid, seconds
 
     done, failed = [], []
     with ThreadPoolExecutor(CONFIG["tuning"]["parallel_jobs"]) as pool:
-        futures = {pool.submit(job, n): n for n in numbers}
+        futures = {pool.submit(job, sid): sid for sid in ids}
         for f in as_completed(futures):
             try:
-                n, seconds = f.result()
-                done.append(n)
+                sid, seconds = f.result()
+                done.append(sid)
                 if on_done:
-                    on_done(n, seconds)
+                    on_done(sid, seconds)
             except RenderError as e:
-                failed.append(str(e))
+                failed.append(f"{futures[f]}: {e}")
     if failed:
         raise RenderError("; ".join(failed))
-    return sorted(done)
-
-
-def render_animation_previews(lesson, beats, seconds_per_step=None):
-    """Render animation beats alone at low resolution. Returns [(slide, beat, contact_sheet, error)]."""
-    seconds_per_step = seconds_per_step or CONFIG["tuning"]["placeholder_seconds"]
-
-    def job(nk):
-        n, k = nk
-        name = f"anim_s{n:02d}_b{k:02d}"
-        # real audio timing where the voice exists, placeholder timing otherwise
-        mp4 = run_manim(lesson, n, False, only_beat=k, fake=seconds_per_step, name=name)
-        sheet = contact_sheet(mp4, lesson.qa / f"{name}.png", frames=12)
-        shutil.rmtree(lesson.media / name, ignore_errors=True)
-        return sheet
-
-    out = []
-    with ThreadPoolExecutor(CONFIG["tuning"]["parallel_jobs"]) as pool:
-        futures = [(nk, pool.submit(job, nk)) for nk in beats]
-        for (n, k), fut in futures:
-            try:
-                out.append((n, k, fut.result(), None))
-            except RenderError as e:
-                out.append((n, k, None, str(e)))
-    return out
+    return [s["id"] for s in script["segments"] if s["id"] in done]
 
 
 # ------------------------------------------------------------------ final video
 def join(lesson):
-    """Concatenate the slide videos (script order) into output/<id>.mp4 with normalized loudness."""
-    _, slides = load_script(lesson.script)
-    files = [lesson.slide_video(s["slide"]) for s in slides]
+    """Concatenate the segment videos (script order) into output/<id>.mp4 with normalized loudness."""
+    script = load_script(lesson.script)
+    files = [lesson.segment_video(s["id"]) for s in script["segments"]]
     missing = [f.name for f in files if not f.exists()]
     if missing:
-        raise RenderError(f"missing slide videos: {missing}")
+        raise RenderError(f"missing segment videos: {missing}")
     lst = lesson.build / "concat.txt"
     lst.write_text("".join(f"file '{f}'\n" for f in files))
     OUTPUT.mkdir(exist_ok=True)
     subprocess.run([str(FFMPEG), "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
-                    "-c:v", "libx264", "-crf", "20", "-preset", "medium",
+                    "-c:v", "libx264", "-crf", "20", "-preset", "medium", "-pix_fmt", "yuv420p",
                     "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-c:a", "aac", "-b:a", "160k", "-ar", "48000",
                     "-movflags", "+faststart", str(lesson.output)], check=True)
-    for old in OUTPUT.glob(f"{lesson.id}_*p.mp4"):        # lightweight copies made by older versions
-        old.unlink()
     return lesson.output, video_duration(lesson.output), lesson.output.stat().st_size
