@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """Terminal interface: colors, panels, live steps with progress bars.
 
 A step shows a spinner (and a bar when the amount of work is known) with a live status line; when it ends
@@ -21,9 +23,12 @@ console = Console(theme=THEME, highlight=False)
 
 
 def banner():
-    """The program's header (help, wizard)."""
+    """The program's header (help, wizard) with the license's Appropriate Legal Notices: the attribution
+    line must stay (NOTICE, additional terms)."""
     console.print(Panel.fit("[bold accent]lezio[/]  [muted]study material → narrated video lesson[/]",
                             border_style="accent", padding=(0, 2)))
+    console.print("[muted]lezio by JustSalvin — https://github.com/JustSalvin/lezio\n"
+                  "GNU AGPL v3 with additional terms, no warranty: see LICENSE and NOTICE.[/]")
 
 
 def section(text):

@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """Comparing and reasoning: compare (side-by-side columns), misconception, analogy, example_nonexample."""
 import numpy as np
 from manim import (DOWN, LEFT, RIGHT, UP, UR, Circle, Create, FadeIn, GrowFromCenter, LaggedStart, Line, Text,

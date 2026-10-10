@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """Validation of what the agent (or a person) writes: narration pieces, scene code, the whole script.
 
 Used by the agent tools (submissions are checked on the spot), by `./lezio tools check` and by the scene runner

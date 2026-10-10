@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """Computing: encode (symbols -> codes), translate (source -> transformation -> result), array (cells and an
 algorithm on them, step by step), code (a listing explained line by line)."""
 import textwrap

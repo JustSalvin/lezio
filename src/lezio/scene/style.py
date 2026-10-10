@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """House style: colors, fonts and sizes of the active theme (themes/<name>.toml), and building blocks.
 
 The theme is chosen in config.toml ([video] theme) or, for one lesson, in its plan. Scene code uses the

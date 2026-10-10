@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """Registry of text-to-speech engines. To add one: subclass Engine in a new module and list it here."""
 from .base import Engine, Option
 from .edge import Edge

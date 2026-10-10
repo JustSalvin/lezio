@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """LLM backends. The program describes tasks (base.Task); a backend runs them on some model.
 
 To add a backend: subclass Backend, implement run(task) (system prompt + user message + tool loop, report

@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """Speech synthesis worker. Runs in .venv-tts (MLX), started by voice/client.py.
 
 Prints one JSON event per line on stdout so that the program can show progress:

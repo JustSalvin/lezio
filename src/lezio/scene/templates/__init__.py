@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """Templates: reusable, data-driven scene blocks.
 
 A segment's scene is a list of BLOCKS. Each block is one template filled with data, with its own title and

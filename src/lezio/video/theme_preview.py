@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """A still image showing a theme (./lezio themes --preview NAME). File handed to the manim command;
 the theme comes from the LEZIO_THEME environment variable."""
 import os

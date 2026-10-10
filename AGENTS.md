@@ -112,6 +112,8 @@ input/  output/            material in, videos out (both gitignored)
 
 ## Conventions
 
+- License: GNU AGPL v3 with additional terms (`LICENSE`, `NOTICE`). Every source file starts with the
+  two-line copyright/SPDX header (copy it into new files); the attribution under `ui.banner()` must stay.
 - Code, files, docs: English. Narration and on-screen texts: the lesson language (Italian by default);
   never hard-code them in the program.
 - Two kinds of settings, never mixed: per-video choices (depth, instructions, focus) come from the

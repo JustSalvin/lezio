@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """Manim scene that renders ONE segment of a lesson: it runs scenes/<segment>.py:build(scene, steps, material).
 
 Started by video/render.py through the manim command, with these environment variables:

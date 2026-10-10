@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """Plain text and Markdown sources: sections by headings (Markdown) or by paragraphs (plain text).
 
 Markdown images that point to local files become figures of their section.

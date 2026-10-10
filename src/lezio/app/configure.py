@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """./lezio config: change config.toml through arrow-key menus.
 
 config.toml stays the only place of the configuration: this command edits it with tomlkit, so comments

@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """Diagrams and processes: flow, mapping, cards, diagram (general boxes and arrows)."""
 from manim import (DOWN, LEFT, RIGHT, UP, FadeIn, GrowArrow, Indicate, LaggedStart, VGroup)
 

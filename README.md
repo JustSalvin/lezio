@@ -190,3 +190,14 @@ src/lezio/                 the program (see AGENTS.md)
 - PowerPoint (`.pptx`) material: text and pictures with python-pptx, page images through LibreOffice.
 - `anthropic-api` backend and other LLMs behind the same interface (`src/lezio/agent/backends/`).
 - More TTS engines (`src/lezio/voice/engines/`).
+
+## License
+
+lezio is free software by JustSalvin, released under the **GNU Affero General Public License v3**
+([LICENSE](LICENSE)) with **additional terms** under its section 7 ([NOTICE](NOTICE)): keep the author
+attribution (in the source files and in the line under the program's banner) and mark modified versions
+as different from the original. Anyone who distributes lezio, or offers a modified version as a network
+service, must share its source under the same terms.
+
+The videos you make with lezio are yours, within the rights to your study material; they are not covered
+by this license.

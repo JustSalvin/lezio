@@ -161,6 +161,10 @@ docs/             HANDOFF.md, history.md, teaching-guidelines.md
 
 ## 6. Decisions and constraints from the user (keep them)
 
+- **Public repository, GNU AGPL v3 + additional terms** (`LICENSE`, `NOTICE`, section 7(b)/(c)): the
+  author's attribution stays in the source headers and under the banner; modified versions say so.
+  The user's lessons and the old archive are gitignored (derived from course material: never commit
+  them; the history was rewritten to remove them).
 - One workflow; no user-chosen visual styles; everything custom goes in the instructions, except depth
   (and which files/pages). Lessons are lectures with one voice (dialogue/review formats were dropped).
 - The agent composes scenes from **library templates first**; its own templates only as a last resort.

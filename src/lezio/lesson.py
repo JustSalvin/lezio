@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """A lesson = one video project, stored in lessons/<id>/.
 
     lesson.json     the study material the lesson is made from: {"sources": [paths], "created": ...}

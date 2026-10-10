@@ -1,0 +1,38 @@
+lezio — study material → narrated video lesson
+Copyright (C) 2026 JustSalvin <https://github.com/JustSalvin/lezio>
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU
+Affero General Public License, version 3, as published by the Free Software Foundation (the file
+LICENSE), supplemented by the additional terms below.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General
+Public License for more details.
+
+
+ADDITIONAL TERMS (section 7 of the GNU Affero General Public License, version 3)
+
+These terms apply to every file of lezio and to every copy, modified version or work based on it.
+
+1. Author attribution (section 7(b)).
+   a) Keep this NOTICE file and the copyright and license notices at the top of the source files.
+   b) Keep the attribution "lezio by JustSalvin — https://github.com/JustSalvin/lezio" in the
+      Appropriate Legal Notices that the program displays (in lezio: under the banner of the help page
+      and of the wizard). A modified version keeps it visible in the equivalent place of its own user
+      interface; it may add its own authors next to it.
+
+2. Modified versions (section 7(c)).
+   a) Do not misrepresent the origin of this program: a modified version must not be presented as the
+      original lezio or as made or endorsed by JustSalvin.
+   b) A modified version must be marked, in reasonable ways, as different from the original: say that it
+      is modified, and based on lezio by JustSalvin, in its Appropriate Legal Notices and in its
+      documentation (for example "based on lezio by JustSalvin, modified by ...").
+
+These terms are permitted additional terms under section 7 of the license: anyone who conveys lezio, or
+a work based on it, must pass them on together with the license.
+
+
+The videos, narrations and other files that lezio produces are not covered by this license: they belong
+to whoever makes them, within the rights to the study material they are made from.
+
+Third-party software used by lezio keeps its own license (for example PyMuPDF: GNU AGPL v3; Manim: MIT).

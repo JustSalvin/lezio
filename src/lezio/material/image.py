@@ -1,3 +1,5 @@
+# lezio — Copyright (C) 2026 JustSalvin — https://github.com/JustSalvin/lezio
+# GNU AGPL v3 with additional terms (section 7): see LICENSE and NOTICE.  SPDX-License-Identifier: AGPL-3.0-only
 """Picture sources (.png, .jpg, .jpeg, .webp): one item, the picture itself."""
 from ..config import CONFIG
 from .common import save_preview, save_png
