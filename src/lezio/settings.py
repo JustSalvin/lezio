@@ -30,12 +30,6 @@ def house_theme():
     return name if (THEMES / f"{name}.toml").exists() else "light"
 
 
-def lesson_theme(script):
-    """The theme a lesson is rendered with: the one chosen in its plan, else the house theme."""
-    name = script.get("theme")
-    return name if name and (THEMES / f"{name}.toml").exists() else house_theme()
-
-
 def default_settings():
     return {**DEFAULT_CHOICES, "language": CONFIG["narration"]["language"],
             "piece_gap": CONFIG["narration"]["piece_gap"]}

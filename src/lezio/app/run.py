@@ -25,7 +25,7 @@ from ..agent.backends import get_backend, task_options
 from ..config import CONFIG, INPUT, ROOT
 from ..lesson import Lesson, all_lessons, lesson_exists, slugify, stored_path
 from ..script import empty_script, find_segment, is_written, load_script, narration, save_script
-from ..settings import DEPTHS, PLAN_CHOICES, lesson_theme, merge_settings, tts_label, tts_options
+from ..settings import DEPTHS, PLAN_CHOICES, house_theme, merge_settings, tts_label, tts_options
 from ..validate import check_script
 from ..video import render
 from ..voice import client as voice
@@ -214,8 +214,7 @@ class Run:
         rows = [("lesson", f"[bold]{self.lesson_id}[/]"),
                 ("material", "\n".join(sources)),
                 ("depth", f"{s['depth']} ({DEPTHS[s['depth']]})"),
-                ("theme", lesson_theme(self.saved) + ("  [muted](chosen for this lesson)[/]" if self.saved.get("theme")
-                                                     and not self.replan else "")),
+                ("theme", house_theme()),
                 ("voice", voice_line),
                 ("agent", f"{CONFIG['agent']['backend']} · model {opts['model'] or 'default'}"
                           + (f" · effort {opts['effort']}" if opts["effort"] else "")),
@@ -356,8 +355,7 @@ class Run:
             raise SystemExit(0)
 
     def show_plan(self):
-        theme = f"  [muted]theme {self.script['theme']}[/]" if self.script.get("theme") else ""
-        ui.console.print(f"\n[bold]{ui.escape(self.script['title'])}[/]{theme}")
+        ui.console.print(f"\n[bold]{ui.escape(self.script['title'])}[/]")
         ui.table(["", "", ""], [[f"[muted]{x['id']}[/]", ui.escape(x["title"]) + (" [muted](written)[/]" if
                                  is_written(self.lesson, x) else ""), f"[muted]{x['minutes']:g} min[/]"]
                                 for x in self.script["segments"]])

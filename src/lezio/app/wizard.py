@@ -77,7 +77,7 @@ def depth(default):
 def instructions(default=""):
     return ask(questionary.text("Instructions for the agent (optional)", default=default, style=STYLE,
                                 instruction="anything you want: e.g. \"Show the original slides\", \"A board "
-                                            "drawn by hand\", \"Skip the live polls\", \"Use the dark theme\".")).strip()
+                                            "drawn by hand\", \"Skip the live polls\".")).strip()
 
 
 def confirm(message, default=True):

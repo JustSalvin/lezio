@@ -10,7 +10,7 @@ from .. import material as mat
 from ..config import CONFIG, ROOT
 from ..lesson import Lesson, all_lessons, slugify
 from ..script import is_written, load_script, narration, pieces
-from ..settings import DEPTHS, house_theme, lesson_theme, tts_label, tts_options
+from ..settings import DEPTHS, house_theme, tts_label, tts_options
 from ..validate import check_script
 from ..video import render
 from ..voice import client as voice
@@ -34,7 +34,7 @@ def status(a):
         ("material", "\n".join(ui.escape(p) + (f"  [muted](pages {focus[p]})[/]" if p in focus else "")
                                for p in lesson.source_names)),
         ("depth", f"{s['depth']} ({DEPTHS[s['depth']]})"),
-        ("theme", lesson_theme(script) + ("  [muted](chosen for this lesson)[/]" if script.get("theme") else "")),
+        ("theme", house_theme()),
         ("voice", ui.escape(tts_label())),
         ("instructions", ui.escape(s["instructions"]) or "[muted]none[/]"),
         ("video", rel(lesson.output) if lesson.output.exists() else "[muted]not assembled yet[/]"),
@@ -173,8 +173,7 @@ def themes(a):
         rows.append(["[ok]●[/]" if path.stem == house_theme() else "", f"[accent]{path.stem}[/]",
                      ui.escape(data.get("description", ""))])
     ui.table(["", "theme", ""], rows)
-    ui.info(ui.escape(f"● the house theme (config.toml [video] theme); a lesson can ask for another in its "
-                      "instructions"))
+    ui.info(ui.escape("● the theme of the videos (config.toml [video] theme)"))
     ui.hint("preview:  ./lezio themes --preview NAME")
     ui.hint("change:   ./lezio config      your own: copy themes/light.toml to themes/NAME.toml")
 

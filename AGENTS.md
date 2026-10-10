@@ -99,9 +99,8 @@ input/  output/            material in, videos out (both gitignored)
 - **Step sheets** (`build/qa/preview_<id>.png`, `final_<id>.png`): for every piece, the frame in its
   middle and at its end. They are what the agent looks at when writing and reviewing (`view_frame` shows
   one frame at full size).
-- **Themes**: `themes/<name>.toml` (colors by role, fonts, sizes). The runner applies the lesson's theme
-  (script.json `theme`, chosen by the plan only when the instructions ask; else config.toml `[video]
-  theme`) before the scene code runs (`style.apply_theme` rebinds the names in every `lezio.scene`
+- **Themes**: `themes/<name>.toml` (colors by role, fonts, sizes). The runner applies the house theme
+  (config.toml `[video] theme`; configuration only, the agent never chooses it) before the scene code runs (`style.apply_theme` rebinds the names in every `lezio.scene`
   module). Scene code uses role names (PRIMARY, HIGHLIGHT, ...), so a new theme re-skins existing lessons;
   the theme file is part of the fingerprint.
 - **Visual language**: the plan states how key concepts look across the lesson (theme color roles,

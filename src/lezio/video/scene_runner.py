@@ -7,8 +7,8 @@ Started by video/render.py through the manim command, with these environment var
     LEZIO_REPORT     JSON file written at the end: error, timing of each piece, layout warnings
 
 The scene code is checked (validate.check_scene_code) before it runs. While it runs, the end of every
-narration piece is checked for texts cut off by the frame or overlapping each other. The lesson's theme
-(script.json "theme", else config.toml [video] theme) is applied before the scene code runs.
+narration piece is checked for texts cut off by the frame or overlapping each other. The house theme
+(config.toml [video] theme) is applied before the scene code runs.
 """
 import json
 import os
@@ -21,7 +21,7 @@ from ..lesson import Lesson
 from ..scene.material import SceneMaterial
 from ..scene import style
 from ..scene.style import FRAME_HEIGHT, FRAME_WIDTH, apply_theme
-from ..settings import lesson_theme
+from ..settings import house_theme
 from ..scene.sync import Steps
 from ..script import estimate_seconds, find_segment, load_script, narration, normalize_piece, piece_key, scene_name
 from ..validate import check_scene_code
@@ -169,7 +169,7 @@ class SegmentScene(Scene):
                                           "speech (the voice waits for them)")
             report["warnings"] += [f"end of piece {t.index}: {w}" for w in layout_warnings(self)]
 
-        report["theme"] = apply_theme(lesson_theme(script))     # before any scene or template code runs
+        report["theme"] = apply_theme(house_theme())     # before any scene or template code runs
         self.camera.background_color = style.BACKGROUND
         steps = Steps(self, pieces, settings["piece_gap"], on_start=on_start, on_end=on_end)
         if code is None:

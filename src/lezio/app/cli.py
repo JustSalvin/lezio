@@ -37,7 +37,7 @@ COMMANDS = [
               "name of an existing lesson", None),
              ("--depth N", f"{DEPTH_HELP} (default 2)", {"type": int, "choices": sorted(DEPTHS)}),
              ("--instructions TEXT", "anything you want from this lesson, e.g. \"Show the original slides\", "
-              "\"Use the dark theme\", \"Skip the live polls\"", {}),
+              "\"Skip the live polls\"", {}),
              ("--focus FILE:PAGES", "use only some pages of a PDF, e.g. --focus \"slides.pdf:1-20\" (repeatable)",
               {"action": "append"}),
              ("--id NAME", "lesson name (default: from the first file); with files, adds them to that lesson", {}),

@@ -18,9 +18,7 @@ TASK: plan the lesson.
       worked example written step by step, a comparison, an original figure, ...), the templates that fit
       it, and why};
    - skipped: [{"ref", "reason"}] for the material in scope that no segment covers (live polls or quizzes,
-     repeated or empty pages, minor details at depth 4, whatever the user's instructions exclude);
-   - theme: only if the user's instructions ask for a different look than the house theme ($house): one of
-     $themes. Omit it otherwise.
+     repeated or empty pages, minor details at depth 4, whatever the user's instructions exclude).
 Every segment cites its sources (a recap cites what it sums up). Every page and section in scope must be
 in the sources of some segment or in skipped. The first segment
 opens the lesson (welcome, what it is about); the last one closes it with a short recap. Follow the depth

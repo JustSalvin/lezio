@@ -19,7 +19,7 @@ from ..config import CONFIG
 from ..material import RefError
 from ..script import find_segment, narration, normalize_piece, save_script
 from ..config import THEMES
-from ..settings import DEPTHS, house_theme, lesson_theme
+from ..settings import DEPTHS, house_theme
 from ..validate import check_blocks, check_scene_code
 from . import prompts
 from .backends import Image, Task, Tool, ToolResult, task_options
@@ -149,8 +149,7 @@ def plan_task(work):
     s = work.script["settings"]
     focus = s.get("focus") or {}
     scope = work.material.scope(focus)
-    themes = sorted(p.stem for p in THEMES.glob("*.toml"))
-    system = prompts.compose("role", "plan", "rules/teaching", house=house_theme(), themes=", ".join(themes))
+    system = prompts.compose("role", "plan", "rules/teaching")
     from ..scene import templates
     system += ("\n\nTEMPLATES the writers compose scenes from (they can also write new ones):\n"
                + templates.catalog(work.lesson, full=False))
@@ -211,9 +210,6 @@ def plan_task(work):
                 skipped_out.append({"ref": ref, "reason": str(x.get("reason", "")) if isinstance(x, dict) else ""})
             except RefError as e:
                 problems.append(f"skipped: {e}")
-        theme = str(args.get("theme") or "").strip()
-        if theme and theme not in themes:
-            problems.append(f"theme must be one of {', '.join(themes)} (or omitted)")
         missing = [r for r in scope if r not in covered and r not in skipped_items]
         if missing:
             problems.append("not covered by any segment and not in skipped: " + ", ".join(missing[:30]))
@@ -224,7 +220,7 @@ def plan_task(work):
             return rejected(problems, "Plan rejected:")
         for k, entry in enumerate(out, 1):
             entry["id"] = f"s{k:02d}"
-        work.script.update(title=title, outline=outline, plan_key=work.plan_key, skipped=skipped_out, theme=theme,
+        work.script.update(title=title, outline=outline, plan_key=work.plan_key, skipped=skipped_out,
                            visual_language=visual_language,
                            segments=[{"id": e.pop("id"), **e} for e in out])
         save_script(work.lesson.script, work.script)
@@ -234,8 +230,7 @@ def plan_task(work):
         Tool("submit_plan", "Submit the lesson plan (checked by the program).",
              {"type": "object", "properties": {"title": {"type": "string"}, "outline": {"type": "string"},
                                                "visual_language": {"type": "string"},
-                                               "segments": ARRAY_OF_OBJECTS, "skipped": ARRAY_OF_OBJECTS,
-                                               "theme": {"type": "string"}},
+                                               "segments": ARRAY_OF_OBJECTS, "skipped": ARRAY_OF_OBJECTS},
               "required": ["title", "outline", "visual_language", "segments"]}, submit)]
     return make_task(work, "plan", "plan", system, prompt, tools, max_turns=60)
 
@@ -250,7 +245,7 @@ def numbered(narration):
 
 def theme_line(script):
     import tomllib
-    name = lesson_theme(script)
+    name = house_theme()
     data = tomllib.loads((THEMES / f"{name}.toml").read_text())
     return f"{name} - {data.get('description', '')}"
 

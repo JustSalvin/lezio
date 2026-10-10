@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ..config import CONFIG, FFMPEG, MANIM, OUTPUT, PACKAGE, ROOT, SUBPROCESS_ENV as ENV, THEMES
 from ..script import find_segment, load_script, pieces, scene_name
-from ..settings import lesson_theme
+from ..settings import house_theme
 
 PREVIEW_FPS = 15                   # manim -ql
 
@@ -99,7 +99,7 @@ def fingerprint(lesson, script, segment):
     s = script["settings"]
     h = hashlib.sha1(json.dumps(segment, sort_keys=True, ensure_ascii=False).encode())
     v = CONFIG["video"]
-    theme = THEMES / f"{lesson_theme(script)}.toml"
+    theme = THEMES / f"{house_theme()}.toml"
     h.update(f"{s['piece_gap']}|{v['width']}x{v['height']}@{v['fps']}|{v.get('subtitles') == 'burned'}".encode())
     h.update(theme.read_bytes() if theme.exists() else b"")
     meta = lesson.durations_meta()

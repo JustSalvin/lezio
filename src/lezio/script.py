@@ -2,7 +2,7 @@
 
     {"version": 2,
      "settings": {"depth": 2, "instructions": "", "focus": {...}},
-     "title": "...", "outline": "...", "plan_key": "...", "theme": "" (a theme chosen for this lesson),
+     "title": "...", "outline": "...", "plan_key": "...",
      "visual_language": "how key concepts look in every segment (colors by role, symbols, recurring diagrams)",
      "segments": [{"id": "s01", "title": "...", "goal": "...", "sources": ["slides.pdf#p1-3"], "minutes": 1.5,
                    "visual": "...",
@@ -23,7 +23,7 @@ from .settings import merge_settings, settings_to_save
 
 def empty_script(settings=None):
     return {"version": 2, "settings": merge_settings(settings), "title": "", "outline": "", "plan_key": "",
-            "theme": "", "visual_language": "", "segments": [], "skipped": []}
+            "visual_language": "", "segments": [], "skipped": []}
 
 
 def load_script(path: Path):
@@ -43,8 +43,7 @@ def load_script(path: Path):
 
 def save_script(path: Path, script):
     out = {"version": 2, "settings": settings_to_save(script["settings"])}
-    out.update({k: script[k] for k in ("title", "outline", "plan_key", "theme", "visual_language", "segments",
-                                         "skipped")})
+    out.update({k: script[k] for k in ("title", "outline", "plan_key", "visual_language", "segments", "skipped")})
     path.write_text(json.dumps(out, ensure_ascii=False, indent=2) + "\n")
 
 

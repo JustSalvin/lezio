@@ -193,10 +193,6 @@ def check_script(lesson, script, material=None):
     warnings = []
     for path in sorted(lesson.templates.glob("*.py")) if lesson.templates.is_dir() else []:
         errors += [f"template {path.stem}: {p}" for p in check_scene_code(path.read_text(), entry=path.stem)]
-    if script.get("theme"):
-        from .config import THEMES
-        if not (THEMES / f"{script['theme']}.toml").exists():
-            errors.append(f"theme '{script['theme']}' does not exist in themes/")
     seen = set()
     for seg in script["segments"]:
         sid = seg.get("id")

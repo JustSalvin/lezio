@@ -70,7 +70,7 @@ change the instructions, rewrite from scratch.
 | Option | Meaning |
 |---|---|
 | `--depth N` | `1` extensive · `2` faithful (default) · `3` condensed · `4` short |
-| `--instructions "..."` | anything else you want from this lesson, e.g. `"Show the original slides"`, `"A board drawn by hand"`, `"Use the dark theme"`, `"Skip the live polls"` |
+| `--instructions "..."` | anything else you want from this lesson, e.g. `"Show the original slides"`, `"A board drawn by hand"`, `"Skip the live polls"` |
 | `--focus "FILE:PAGES"` | only some pages of a PDF, e.g. `--focus "slides.pdf:1-20"` (repeatable) |
 | `--id NAME` | lesson name (default: from the first file); with files, adds them to that lesson |
 | `--rewrite` | plan and write the lesson again from scratch (the old one is backed up) |
@@ -116,7 +116,7 @@ The **visual style** (colors, fonts, sizes) is the house **theme**, a file in `t
 `themes/<name>.toml` and edit it. Choose the house theme in `config.toml` (`[video] theme`) or with
 `./lezio config`; preview one with `./lezio themes --preview <name>`. Scenes use the theme's color names,
 never fixed colors, so changing the theme re-renders existing lessons with the new look (no rewriting).
-A lesson can ask for a different theme in its instructions (e.g. "use the chalkboard theme").
+The theme is configuration: the agent never chooses or changes it.
 
 | Depth | Narration |
 |---|---|
