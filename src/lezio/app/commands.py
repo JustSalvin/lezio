@@ -4,6 +4,7 @@
 build, config, voices, themes, templates, tools.
 All output goes through ui.py, so every command looks the same."""
 import json
+import shutil
 import subprocess
 import time
 from argparse import Namespace
@@ -165,7 +166,10 @@ def voices(a):
             ui.fail(ui.escape(str(e)))
         st.done(f"{rel(out)}  [muted]{result.get('duration')}s of audio[/]")
     if a.play:
-        subprocess.run(["afplay", str(out)])
+        if shutil.which("afplay"):
+            subprocess.run(["afplay", str(out)])
+        else:
+            ui.hint(f"--play uses afplay (macOS): listen to {rel(out)} with any player")
 
 
 def themes(a):
@@ -317,7 +321,7 @@ def demo_lesson():
         doc.save(src / "demo.pdf")
         im = Image.new("RGB", (1200, 700), "white")
         d = ImageDraw.Draw(im)
-        font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 44)
+        font = ImageFont.load_default(44)
         d.ellipse([150, 150, 550, 550], outline=(20, 70, 160), width=8)
         d.ellipse([650, 150, 1050, 550], outline=(232, 89, 12), width=8)
         d.text((290, 320), "A", fill=(20, 70, 160), font=font)
@@ -431,8 +435,7 @@ def copy(a):
 
 
 def delete(a):
-    """Moves the lesson folder to the Trash; the videos in output/ and the material in input/ stay."""
-    import shutil
+    """Deletes the lesson folder for good (no Trash); the videos in output/ and the material in input/ stay."""
     from . import wizard
     lesson = Lesson(a.lesson)
     ui.key_values([("lesson", f"[bold]{lesson.id}[/]  {rel(lesson.dir)}"),
@@ -441,10 +444,8 @@ def delete(a):
     if not a.yes:
         if not wizard.interactive():
             ui.fail("deleting a lesson needs a confirmation", f"./lezio delete {lesson.id} --yes")
-        if not wizard.confirm(f"Move {lesson.id} to the Trash?", default=False):
+        if not wizard.confirm(f"Delete {lesson.id}? It cannot be undone.", default=False):
             ui.info("Nothing deleted.")
             return
-    trash = __import__("pathlib").Path.home() / ".Trash"
-    target = trash / f"lezio-{lesson.id}-{time.strftime('%Y%m%d-%H%M%S')}"
-    shutil.move(str(lesson.dir), str(target))
-    ui.done(f"{lesson.id} moved to the Trash  [muted]({target.name})[/]")
+    shutil.rmtree(lesson.dir)
+    ui.done(f"{lesson.id} deleted")

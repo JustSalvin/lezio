@@ -35,7 +35,7 @@ instructions override them. The look (colors, fonts, sizes) is the theme (`theme
 
 ```
 lezio                      bash wrapper: python -m lezio in .venv (PYTHONPATH=src)
-setup.sh                   installation (Homebrew libs, two venvs, TTS model download)
+setup.sh                   project setup: two venvs, their packages, TTS model (nothing on the system)
 config.toml                configuration (TTS, language, LLM, video + theme, tuning) - also ./lezio config
 themes/                    visual themes: colors, fonts, sizes (house style presets; users add their own)
 templates/                 the user's own scene templates (optional; loaded with the library)
@@ -115,6 +115,10 @@ input/  output/            material in, videos out (both gitignored)
 
 ## Conventions
 
+- Installation never depends on the system or its package manager: `setup.sh` automates only what is
+  inside the project (venvs, Python packages, models, folders); system requirements (Python, cairo, ...)
+  are listed in README.md with how to get them, and no script installs them. No hard-coded system paths
+  (fonts: Pillow's bundled one, `ImageFont.load_default(size)`).
 - License: GNU AGPL v3 with additional terms (`LICENSE`, `NOTICE`). Every source file starts with the
   two-line copyright/SPDX header (copy it into new files); the attribution under `ui.banner()` must stay.
 - Code, files, docs: English. Narration and on-screen texts: the lesson language (Italian by default);
@@ -135,7 +139,7 @@ input/  output/            material in, videos out (both gitignored)
   `hint` for what to do next. Detailed output of subprocesses goes to `lessons/<id>/build/logs/`.
 - Commands: one verb each (`make`, `redo`, `build`, `list`, `status`, `rename`, `copy`, `delete`,
   `config`, `voices`, `themes`, `templates`, `tools`, `help`); add one to `cli.COMMANDS`. Lesson commands work on
-  lessons/<id>/ only: `delete` moves it to the macOS Trash; videos in output/ and files in input/ are never
+  lessons/<id>/ only: `delete` deletes it for good (no Trash); videos in output/ and files in input/ are never
   moved, renamed or deleted. Configuration changes only through `config` (or the file):
   the other commands show and preview.
 - A segment video is re-rendered when its fingerprint changes (segment entry, audio durations, scene file,

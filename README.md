@@ -25,19 +25,41 @@ segment — checked and previewed on the spot —, ...): it has no files, shell 
 
 ## Requirements
 
-- macOS on **Apple Silicon** (M1 or newer), ~6 GB of free disk space
-- [Homebrew](https://brew.sh)
-- Python 3.11+ (installed automatically if you use [mise](https://mise.jdx.dev))
-- An LLM for the agent tasks, one of (`[agent] backend` in `config.toml`):
-  - `claude-subscription` (default): **[Claude Code](https://claude.com/claude-code)** logged in once with
-    `claude` using your Claude subscription (no API key);
-  - `anthropic-api`: an Anthropic API key in `ANTHROPIC_API_KEY` (paid per token);
-  - `openai-api`: an OpenAI API key in `OPENAI_API_KEY` (paid per token);
-  - `local`: a model on your computer behind an OpenAI-compatible server — [Ollama](https://ollama.com)
-    (default), LM Studio, llama.cpp... The model needs tool calling and, ideally, vision, and the server a
-    context of **32768 tokens or more** (Ollama: the app's settings, or `OLLAMA_CONTEXT_LENGTH=32768 ollama
-    serve`; lezio stops with a message if Ollama runs it with less). Free and private, but small models write
-    weaker lessons than Claude or GPT and take longer.
+lezio installs nothing on your system: install these in the way you prefer, then `./setup.sh` sets up
+everything else inside the project folder.
+
+**System**
+
+- macOS or Linux (developed and tested on macOS with Apple Silicon; on Windows, use WSL).
+- **Python 3.13 or 3.14** with `venv`: `python3` on the PATH, or `PYTHON=/path/to/python ./setup.sh`.
+- **cairo** with its headers, **pkg-config** and a **C compiler**: Manim's `pycairo` is built against them
+  during the setup. On Linux also **pango** with its headers (for `manimpango`). For example:
+  - macOS: the Xcode Command Line Tools (`xcode-select --install`) and, with Homebrew,
+    `brew install cairo pkgconf`;
+  - Debian/Ubuntu: `sudo apt install build-essential python3-dev python3-venv pkg-config libcairo2-dev
+    libpango1.0-dev`;
+  - Fedora: `sudo dnf install gcc python3-devel pkgconf-pkg-config cairo-devel pango-devel`.
+- About 1.5 GB of disk for the two environments, plus the speech model (Voxtral: about 3 GB).
+- Fonts: the preset themes use fonts that come with macOS (Avenir Next, Baskerville, Menlo, Chalkboard SE,
+  Noteworthy). Elsewhere install them, or put fonts you have in `themes/*.toml` (otherwise a fallback font
+  is used).
+
+**Voice** (`[tts] engine` in `config.toml`)
+
+- `voxtral` (default, local): runs with MLX on the GPU of Apple Silicon Macs. On other computers use `edge`
+  (Microsoft's online voices, free).
+
+**LLM** for the agent tasks, one of (`[agent] backend` in `config.toml`):
+
+- `claude-subscription` (default): **[Claude Code](https://claude.com/claude-code)** logged in once with
+  `claude` using your Claude subscription (no API key);
+- `anthropic-api`: an Anthropic API key in `ANTHROPIC_API_KEY` (paid per token);
+- `openai-api`: an OpenAI API key in `OPENAI_API_KEY` (paid per token);
+- `local`: a model on your computer behind an OpenAI-compatible server — [Ollama](https://ollama.com)
+  (default), LM Studio, llama.cpp... The model needs tool calling and, ideally, vision, and the server a
+  context of **32768 tokens or more** (Ollama: the app's settings, or `OLLAMA_CONTEXT_LENGTH=32768 ollama
+  serve`; lezio stops with a message if Ollama runs it with less). Free and private, but small models write
+  weaker lessons than Claude or GPT and take longer.
 
 ## Installation
 
@@ -45,8 +67,9 @@ segment — checked and previewed on the spot —, ...): it has no files, shell 
 ./setup.sh
 ```
 
-Installs `cairo`/`pkgconf` with Homebrew, creates two virtual environments inside the project (`.venv`
-for the program and video, `.venv-tts` for speech) and downloads the speech model.
+Creates two virtual environments inside the project (`.venv` for the program and video, `.venv-tts` for
+speech), installs their Python packages and downloads the speech model of the configured voice. It does
+not install anything on the system: if a requirement is missing, it stops and points here.
 
 ## Usage
 
@@ -92,7 +115,7 @@ change the instructions, rewrite from scratch.
 ./lezio status <lesson>                                   # segments: written, voice, video up to date?
 ./lezio rename <lesson> <new-name>                        # rename a lesson (output/ is not touched)
 ./lezio copy <lesson> <new-name>                          # duplicate it (e.g. to try other instructions)
-./lezio delete <lesson>                                   # move it to the Trash (output/ and input/ are not touched)
+./lezio delete <lesson>                                   # delete it for good (output/ and input/ are not touched)
 ./lezio redo <lesson> s03 --note "add an example"         # the agent rewrites segment s03
 ./lezio redo <lesson> s03,s05 --part voice                # new voice takes   (--part video: re-render)
 ./lezio build <lesson>                                    # after editing the lesson by hand

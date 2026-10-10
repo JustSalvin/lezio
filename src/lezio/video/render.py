@@ -64,10 +64,7 @@ def step_sheet(mp4, report, png, fps, width=1440):
     rows = (len(infos) + 1) // 2
     sheet = Image.new("RGB", (width, rows * (cell_h + cap_h + 8) + 6), (70, 70, 70))
     draw = ImageDraw.Draw(sheet)
-    try:
-        font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 14)
-    except OSError:
-        font = ImageFont.load_default()
+    font = ImageFont.load_default(14)                 # the font bundled with Pillow: same on every system
     for k, p in enumerate(infos):
         x = 6 + (k % 2) * 2 * (cell_w + 6)
         y = 6 + (k // 2) * (cell_h + cap_h + 8)

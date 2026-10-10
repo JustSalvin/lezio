@@ -70,7 +70,7 @@ COMMANDS = [
     Command("copy", "Your lessons", "duplicate a lesson, e.g. to try other instructions or depth", "<lesson> <new-name>",
             [("<lesson>", "the lesson", None), ("<new-name>", "the name of the copy", None)],
             ["./lezio copy binario binario-breve", "./lezio make binario-breve --depth 4 --yes"], commands.copy),
-    Command("delete", "Your lessons", "move a lesson to the Trash (output/ and input/ are not touched)",
+    Command("delete", "Your lessons", "delete a lesson for good (output/ and input/ are not touched)",
             "<lesson> [--yes]", [("<lesson>", "the lesson", None),
                                  ("-y, --yes", "no confirmation", {"action": "store_true"})],
             ["./lezio delete binario-breve"], commands.delete),

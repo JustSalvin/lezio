@@ -27,7 +27,8 @@ look at pages, submit a segment — checked and previewed on the spot —, ...):
 - Machine: macOS on Apple Silicon (M5, 24 GB). Python 3.14 via mise. Homebrew cairo/pkgconf. Two venvs:
   `.venv` (program, Manim 0.22, PyMuPDF, python-docx, Claude Agent SDK, anthropic + openai SDKs [in
   requirements-video.txt, not yet installed in the user's .venv], rich, questionary, tomlkit) and
-  `.venv-tts` (MLX, mlx-audio with Voxtral, edge-tts). `setup.sh` installs everything.
+  `.venv-tts` (MLX, mlx-audio with Voxtral, edge-tts). `setup.sh` sets up the project only (venvs,
+  packages, speech model); system requirements are listed in README.md.
 - LLM: four backends, chosen in config.toml (`[agent] backend`), each with its own settings in
   `[agent.<backend>]`: `claude-subscription` (default: Claude Agent SDK with the user's Claude Code login,
   no API key; Sonnet, effort high), `anthropic-api` (ANTHROPIC_API_KEY), `openai-api` (OPENAI_API_KEY,
@@ -179,11 +180,15 @@ docs/             HANDOFF.md, history.md, teaching-guidelines.md
 - Configuration changes only through `./lezio config` or the file; `voices`/`themes`/`templates` only show
   and preview.
 - lezio works on the lesson, **not on `output/`**: lesson commands never move/rename/delete videos (it
-  only writes the video when assembling); `delete` moves the lesson folder to the macOS Trash and never
-  touches `input/`. Video state in `list`/`status` comes from the lesson (`build/joined.json`).
+  only writes the video when assembling); `delete` deletes the lesson folder for good (no Trash: nothing
+  system-specific) and never touches `input/`. Video state in `list`/`status` comes from the lesson (`build/joined.json`).
 - **Never open other apps automatically** (no Preview/QuickTime/players): previews and samples are saved
   and their paths printed; audio is played only with an explicit `--play`.
 - Consistent terminal UI: all output through `app/ui.py`; every command described once in `cli.COMMANDS`.
+- **Installation independent of the system and its package manager**: README lists the system
+  requirements and how to get them; `setup.sh` automates only project-level steps (venvs, packages,
+  models, folders) and never installs system software (no Homebrew/apt in scripts, no per-package-manager
+  adapters). Code must not rely on system paths or tools (fonts: Pillow's bundled font).
 - **Do not download or install anything on the Mac without asking** (packages, models, servers); if a
   test really needs software, a Docker container (OrbStack) is acceptable.
 - Ask before outward-facing actions; the user tests lessons in parallel: check for running `lezio`/`manim`
