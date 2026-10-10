@@ -17,13 +17,14 @@ through tools the program defines.
                                          │    agent/backends/     LLM backends (Claude subscription; API planned)
                                          ├─ validate.py           narration rules, scene code checks, script
                                          ├─ voice/client.py ─ voice/synthesize.py (in .venv-tts) ─ voice/engines/
-                                         └─ video/render.py ─ manim ─ video/scene_runner.py ─ scenes/<id>.py
-                                                                        └─ lezio.scene (helper library)
+                                         └─ video/render.py ─ manim ─ video/scene_runner.py ─ template blocks
+                                                                        └─ lezio.scene (templates, helpers)
 ```
 
 Flow of `./lezio <files|lesson>`: resolve the per-video choices (wizard/options, saved choices) → summary
 → ingest new/changed sources → plan task (when there is no plan for the current sources/focus/depth)
-→ write tasks (`tuning.segments_per_task` segments each; every submission is checked and previewed) →
+→ write tasks (`tuning.segments_per_task` segments each; a segment is a list of template blocks, every
+submission is checked and previewed) →
 voice → render outdated segments → review task on the re-rendered segments → re-render fixed → join.
 Every step is resumable. There are no styles: the agent decides how to teach each segment following the
 teaching guidelines (`prompts/rules/teaching.md`, research in `docs/teaching-guidelines.md`); the user's
@@ -36,6 +37,7 @@ lezio                      bash wrapper: python -m lezio in .venv (PYTHONPATH=sr
 setup.sh                   installation (Homebrew libs, two venvs, TTS model download)
 config.toml                configuration (TTS, language, LLM, video + theme, tuning) - also ./lezio config
 themes/                    visual themes: colors, fonts, sizes (house style presets; users add their own)
+templates/                 the user's own scene templates (optional; loaded with the library)
 src/lezio/
   config.py                paths, CONFIG, environment for subprocesses
   lesson.py                Lesson (all paths of lessons/<id>/), slugify, listing
@@ -61,10 +63,15 @@ src/lezio/
     manim_entry.py         file given to the manim CLI
     render.py              previews, final renders, step sheets, fingerprints, final join
     theme_preview.py       still image of a theme (./lezio themes --preview)
+    scene_runner.py        runs a segment: its template blocks (or, for older segments, scenes/<id>.py)
+  scene/templates/         the template library: __init__.py (framework: @template, Ctx, run_blocks,
+                           checks, catalog), kit.py (helpers for authors), one module per family
+                           (text, diagrams, structures, compare, math, data, cs, material)
   scene/                   PUBLIC helper library of scene code (`from lezio.scene import *`):
                            sync.py (Steps/Timer), style.py (theme colors/fonts/sizes, T, heading, box...),
-                           material.py (material.page/figure, page.mark), layouts.py (optional layouts)
-lessons/<id>/              lesson.json, script.json, scenes/*.py, build/ (cache, gitignored)
+                           material.py (material.page/figure, page.mark), templates/ (above)
+lessons/<id>/              lesson.json, script.json, templates/*.py (the agent's), build/ (cache, gitignored)
+lessons/_templates/        internal lesson used to render template examples (./lezio templates --demo)
 archive/slide-reader/      old slide-reader lessons (not loaded)
 input/  output/            material in, videos out (both gitignored)
 ```
@@ -74,11 +81,18 @@ input/  output/            material in, videos out (both gitignored)
 - **Refs** address the material: `slides.pdf#p3` (page), `slides.pdf#p3-5`, `slides.pdf#p3.f1` (figure),
   `notes.md#s2` (section), `diagram.png` (picture source). Source ids are slugs of the file names.
 - **Segments**: a lesson is an ordered list of segments (`s01`, `s02`, ...): plan data (title, goal,
-  sources, minutes, visual idea), narration pieces (one audio file
-  each, key `<segment>_<piece>`), and a scene file `scenes/<id>.py` defining `build(scene, steps, material)`.
-- **Scene contract**: `build` calls `steps()` once per narration piece; the Timer it returns holds the
-  speech time of that piece (`t.play`, `t.wait`, `t.until`). The runner checks the code first, then
-  reports per piece: start/end times, texts cut off or overlapping, animations longer than the speech.
+  sources, minutes, visual idea) and **blocks**: `{"template", "title", "args", "say"}`. The narration
+  pieces of all blocks (one audio file each, key `<segment>_<piece>`) are the segment's narration.
+  (Segments written by older versions have `narration` + `scenes/<id>.py` instead; still rendered.)
+- **Templates**: functions `(ctx, steps, **args)` registered with `@template(category, use_for, example)`.
+  Three sources, one interface: the library (`scene/templates/`), the user's `templates/` folder, the
+  agent's own per lesson (`lessons/<id>/templates/<name>.py`, written with the `define_template` tool,
+  statically checked, executed only inside the render subprocess). The catalog the agent reads is
+  generated from signatures, docstrings, `use_for` and `example`.
+- **Blocks at run time** (`templates.run_blocks`): each block gets its narration pieces; at its first piece
+  the previous block's content fades out (unless `keep`), the title changes only if it differs; the
+  template lays out inside `ctx.area` (`ctx.place` fits and scales). The runner reports per piece:
+  start/end times, texts cut off or overlapping, animations longer than the speech.
 - **Step sheets** (`build/qa/preview_<id>.png`, `final_<id>.png`): for every piece, the frame in its
   middle and at its end. They are what the agent looks at when writing and reviewing (`view_frame` shows
   one frame at full size).
@@ -114,8 +128,10 @@ input/  output/            material in, videos out (both gitignored)
   `lezio.scene` + runner code, material, video settings): `video/render.fingerprint`. Audio is regenerated
   when text or TTS options change.
 - Temporary render files (`build/media/`) are deleted as soon as a render is copied out.
-- Scene files import `from lezio.scene import *`: keep that API stable (it is also what
-  `agent.tasks.scene_api()` shows the model, generated from signatures and docstrings).
+- Templates and older scene files import `from lezio.scene import *`: keep that API stable (it is also
+  what `agent.tasks.scene_api()` shows the model for its own templates).
+- Every template has an `example` that passes `./lezio templates --demo <name>`; run `--demo all` after
+  changing the framework, the kit, the style or a theme.
 
 ## How to extend
 
@@ -129,9 +145,28 @@ reader in `material._reader`; bump `material.VERSION` when readers change (sourc
 **Teaching guidelines** — `agent/prompts/rules/teaching.md` (given to plan, write and review tasks); keep
 `docs/teaching-guidelines.md` (sources) in sync.
 
+**Template** — a function in a module of `scene/templates/` (or a file in `templates/` at the project
+root for your own):
+
+```python
+from lezio.scene import *
+
+@template(category="diagram", use_for="when the agent should pick it",
+          example={"title": "...", "args": {"items": ["a", "b"]}, "say": ["...", "..."]})
+def my_template(ctx, steps, items: list[str], note: str | None = None):
+    """What it shows; the arguments; Phases: one per item."""
+    group = VGroup(*[box(i) for i in items]).arrange(RIGHT)
+    ctx.place(group)                                   # fit (and scale) inside the free area
+    run_phases(steps, [(lambda m: lambda t: t.play(FadeIn(m), rt=0.6))(m) for m in group])
+```
+
+Rules: annotate the arguments (the program checks the agent's JSON against them); build first, animate
+inside phases; only theme names for colors/fonts/sizes; `text_box` for text that must wrap; the example
+narration in the lesson language without digits. Check it with `./lezio templates --demo my_template
+--open`. The module is discovered automatically; no registration list to edit.
+
 **Scene helper** — a function in `lezio/scene/*.py` exported by `scene/__init__.py`, with a docstring
-written for the model, and listed in `agent.tasks.scene_api()`. Layouts: `@layout` functions
-`(scene, steps, ...)` in `layouts.py`, registered in `LAYOUTS`.
+written for the model, and listed in `agent.tasks.scene_api()`.
 
 **TTS engine** — `voice/engines/<name>.py`: subclass `Engine`, declare `options`
 (`Option(default, help, choices, minimum, maximum)`), implement `prepare`, `synthesize(text, opts) ->
@@ -152,7 +187,8 @@ order of tasks and retries in `app/run.py`.
 .venv/bin/python -m py_compile $(find src -name "*.py")
 ./lezio check <lesson>                             # narration, scene code, refs
 ./lezio render <lesson> --segments s01 --preview   # step sheet in build/qa (estimated timing if no voice)
-./lezio scene-api                                  # the helper reference the model sees
+./lezio templates --demo all                       # every template renders its example (build/qa)
+./lezio scene-api                                  # the API the model sees for its own templates
 ./lezio tts --try "Prova" --engine edge            # TTS engines
 ./lezio build <lesson>                             # voice/render/join without LLM calls
 ```

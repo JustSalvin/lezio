@@ -28,6 +28,7 @@ HELP = """[bold]lezio[/] [muted]· study material → narrated video lesson[/]
   ./lezio build <lesson>                           rebuild after editing the lesson by hand
   ./lezio config                                   change the configuration (voice, agent, video, theme...)
   ./lezio themes [--preview NAME]                  visual themes (house style presets) and their preview
+  ./lezio templates [--demo NAME|all]              scene templates the agent uses; render their examples
   ./lezio tts                                      voices and TTS options;  --try "text" to listen
   ./lezio help tools                               low-level commands
 
@@ -75,6 +76,7 @@ def sub_parser():
     add("build", commands.build, lesson)
     add("config", commands.config)
     add("themes", commands.themes, (["--preview"], {}))
+    add("templates", commands.templates, (["--demo"], {}), (["--open"], {"action": "store_true"}))
     add("tts", commands.tts, (["--engine"], {}), (["--try"], {"dest": "try_text"}), (["--voice"], {}),
         (["--set"], {"action": "append", "default": []}), (["--play"], {"action": "store_true"}))
     add("check", commands.check, lesson)
@@ -87,7 +89,7 @@ def sub_parser():
     return ap
 
 
-SUBCOMMANDS = {"status", "redo", "build", "config", "themes", "tts", "check", "ingest", "audio", "render", "join", "scene-api"}
+SUBCOMMANDS = {"status", "redo", "build", "config", "themes", "templates", "tts", "check", "ingest", "audio", "render", "join", "scene-api"}
 
 
 def main():

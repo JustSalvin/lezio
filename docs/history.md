@@ -48,6 +48,11 @@ Changes decided by the user during the execution:
   instructions. Only the depth remains a choice (plus which files and pages to use).
 - The house visual style became themes: files in `themes/` with presets (light, dark, chalkboard,
   whiteboard, paper) that users can copy and edit; scenes use color roles, so a theme re-skins lessons.
+- Free scene code proved slow to write (the model generated ten times more text than with slide-reader's
+  templates), so templates came back in a new form: a modular, extensible library of data-driven
+  templates (built-in, the user's `templates/`, and the agent's own per lesson), each with an example
+  that documents and tests it; a segment is a list of template blocks with their narration. The default
+  model became Sonnet.
 - `./lezio config`: every configuration setting can be changed through the arrow-key menus;
   `config.toml` stays the only place of the configuration (edited with tomlkit, comments kept).
 

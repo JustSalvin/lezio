@@ -17,10 +17,10 @@ import time
 
 from ..config import CONFIG
 from ..material import RefError
-from ..script import find_segment, normalize_piece, save_script
+from ..script import find_segment, narration, normalize_piece, save_script
 from ..config import THEMES
 from ..settings import DEPTHS, house_theme, lesson_theme
-from ..validate import check_narration, check_scene_code, scene_code_warnings
+from ..validate import check_blocks, check_scene_code
 from . import prompts
 from .backends import Image, Task, Tool, ToolResult, task_options
 
@@ -105,15 +105,17 @@ def _doc(obj, indent="    "):
 
 
 def scene_api():
-    """Reference of the helpers available to scene code, generated from lezio.scene (what the model knows)."""
-    from ..scene import layouts, material, style, sync
-    out = ["Narration sync - t = steps() starts the next piece and returns its Timer t:"]
+    """Reference of what custom template code can use, generated from lezio.scene (what the model knows)."""
+    from ..scene import material, style, sync
+    from ..scene.templates import Ctx, kit
+    out = ["Narration sync - t = steps() starts the next piece of the block and returns its Timer t:"]
     for name in ("play", "wait", "until", "finish", "clear"):
         out.append(f"  t.{name}{_signature(getattr(sync.Timer, name), 1)}{_doc(getattr(sync.Timer, name))}")
     out.append("  t.duration, t.left, t.pause, t.say, t.index: speech length, speech left, silence after, text, number")
-    out.append(f"  steps.take{_signature(sync.Steps.take, 1)}{_doc(sync.Steps.take)}")
-    out.append("  steps.left: pieces not started yet")
-    out.append("\nStudy material - `material`:")
+    out.append("  steps.left: pieces of the block not started yet;  len(steps): pieces of the block")
+    out.append("\nThe context - ctx:" + _doc(Ctx, "  "))
+    out.append(f"  ctx.place{_signature(Ctx.place, 1)}{_doc(Ctx.place)}")
+    out.append("\nStudy material - ctx.material:")
     for name in ("page", "figure", "text", "lines"):
         fn = getattr(material.SceneMaterial, name)
         out.append(f"  material.{name}{_signature(fn, 1)}{_doc(fn)}")
@@ -127,14 +129,19 @@ def scene_api():
                "NEGATIVE_SOFT (wrong, no), NEUTRAL_SOFT (neutral fills)")
     out.append("  fonts: FONT (text), TITLE_FONT, MONO (code, digits in columns), HAND (handwriting: board-like "
                "writing, annotations)   sizes: TITLE_SIZE, TEXT_SIZE, SMALL_SIZE")
-    out.append("  frame: FRAME_WIDTH, FRAME_HEIGHT, SAFE_LEFT, SAFE_RIGHT, SAFE_BOTTOM, SAFE_TOP")
-    for name in ("T", "MT", "heading", "wrap", "fit", "box", "arrow", "person", "check", "cross"):
+    for name in ("T", "MT", "wrap", "fit", "box", "arrow", "person", "check", "cross"):
         fn = getattr(style, name)
         out.append(f"  {name}{_signature(fn)}{_doc(fn)}")
-    out.append("\nLayouts (optional) - " + (inspect.getdoc(layouts) or "").split("\n\n")[1].replace("\n", " "))
-    for name, fn in layouts.LAYOUTS.items():
+    out.append("\nTemplate helpers:")
+    for name in ("run_phases", "text_box", "text_lines", "frame", "panel", "focus_anims", "dim_to", "pulse"):
+        fn = getattr(kit, name)
         out.append(f"  {name}{_signature(fn)}{_doc(fn)}")
     return "\n".join(out)
+
+
+def templates_reference(lesson=None):
+    from ..scene import templates
+    return templates.catalog(lesson)
 
 
 # ======================================================================== plan
@@ -144,6 +151,9 @@ def plan_task(work):
     scope = work.material.scope(focus)
     themes = sorted(p.stem for p in THEMES.glob("*.toml"))
     system = prompts.compose("role", "plan", "rules/teaching", house=house_theme(), themes=", ".join(themes))
+    from ..scene import templates
+    system += ("\n\nTEMPLATES the writers compose scenes from (they can also write new ones):\n"
+               + templates.catalog(work.lesson, full=False))
     prompt = settings_block(work)
     units, described = work.material.size(focus)
     lo, hi = prompts.target_minutes(s["depth"], units)
@@ -270,40 +280,36 @@ class SegmentSubmissions:
         self.renders = {sid: 0 for sid in ids}
         self.accepted = {sid: False for sid in ids}
 
-    def submit(self, sid, narration, code, next_hint):
+    def submit(self, sid, blocks, next_hint):
         from ..video import render
         work = self.work
         if sid not in self.ids:
             return ToolResult([f"Choose a segment among {', '.join(self.ids)}."], error=True)
         if self.renders[sid] >= self.rounds:
             return ToolResult([f"No submissions left for {sid}: {next_hint}"], error=True)
-        errors, warnings = check_narration(narration)
-        warnings += scene_code_warnings(code) if isinstance(code, str) else []
-        if not isinstance(code, str) or not code.strip():
-            errors.append("code is empty")
-        else:
-            errors += [f"code: {p}" for p in check_scene_code(code)]
+        errors, warnings = check_blocks(blocks, work.lesson)
         if errors:
             return rejected(errors)
         self.renders[sid] += 1
         left = self.rounds - self.renders[sid]
         seg = find_segment(work.script, sid)
-        candidate = {**seg, "narration": narration, "scene": sid}
+        candidate = {k: v for k, v in seg.items() if k not in ("narration", "scene")}
+        candidate["blocks"] = blocks
         try:
-            sheet, report = render.preview(work.lesson, candidate, code)
+            sheet, report = render.preview(work.lesson, candidate)
         except render.RenderError as e:
             report = e.report or {}
             return ToolResult([f"The scene failed while rendering: {e}"]
                               + [f"warning: {w}" for w in report.get("warnings", [])[:8]]
                               + [f"Fix it and submit again ({left} submissions left for {sid})."
                                  if left else f"No submissions left for {sid}."], error=True)
-        seg.update(narration=narration, scene=sid)
-        work.lesson.scenes.mkdir(parents=True, exist_ok=True)
-        work.lesson.scene_file(sid).write_text(code.rstrip() + "\n")
+        seg.pop("narration", None)
+        seg.pop("scene", None)
+        seg["blocks"] = blocks
         save_script(work.lesson.script, work.script)
         self.accepted[sid] = True
         notes = warnings + report.get("warnings", [])
-        spoken = sum(len(normalize_piece(p)["say"].split()) for p in narration) / 2.5
+        spoken = sum(len(normalize_piece(p)["say"].split()) for p in narration(seg)) / 2.5
         planned = 60 * (seg.get("minutes") or 0)
         if planned and spoken > 1.4 * planned + 10:
             notes.insert(0, f"the narration lasts about {spoken:.0f} s, the plan gives this segment {planned:.0f} s: "
@@ -342,13 +348,39 @@ def frame_tool(work, ids, final):
                  "required": ["id", "piece"]}, handler)
 
 
+BLOCKS_SCHEMA = {"type": "array", "items": {"type": "object"}}
+NAME = __import__("re").compile(r"^[a-z][a-z0-9_]{1,39}$")
+
+
+def define_template_tool(work):
+    """define_template: the agent's own template for this lesson, usable in the blocks of every segment."""
+    def handler(args):
+        from ..scene import templates
+        name, code = str(args.get("name", "")).strip(), args.get("code") or ""
+        if not NAME.match(name):
+            return ToolResult(["name: lowercase letters, digits and _, starting with a letter"], error=True)
+        if name in templates.load_library():
+            return ToolResult([f"'{name}' is a library template: choose another name"], error=True)
+        problems = check_scene_code(code, entry=name)
+        if problems:
+            return rejected(problems)
+        work.lesson.templates.mkdir(parents=True, exist_ok=True)
+        (work.lesson.templates / f"{name}.py").write_text(code.rstrip() + "\n")
+        return ToolResult([f"Template {name} saved for this lesson. Use it in blocks ({{\"template\": \"{name}\", "
+                           "...}); it runs when a segment using it is submitted, and errors come back then."])
+    return Tool("define_template", "Define (or replace) a template of your own for this lesson, when no library "
+                "template fits: Python code with `@template(...)` and `def <name>(ctx, steps, ...)`.",
+                {"type": "object", "properties": {"name": {"type": "string"}, "code": {"type": "string"}},
+                 "required": ["name", "code"]}, handler)
+
+
 def write_task(work, ids, note=""):
     script, s = work.script, work.script["settings"]
     segs = [find_segment(script, sid) for sid in ids]
     order = [x["id"] for x in script["segments"]]
     first, last = order.index(ids[0]), order.index(ids[-1])
     system = prompts.compose("role", "write", "rules/teaching", "rules/writing", "rules/narration_format",
-                             "rules/scene_api", api=scene_api())
+                             "rules/scenes", templates=templates_reference(work.lesson), api=scene_api())
     prompt = settings_block(work) + f"\nTheme of the lesson: {theme_line(script)}"
     plan = "\n".join(f"  {x['id']}  {x['title']}" + ("   <- write now" if x["id"] in ids else "")
                      for x in script["segments"])
@@ -360,7 +392,7 @@ def write_task(work, ids, note=""):
         prompt += "\nThe first segment to write opens the lesson: welcome the viewer and say what the lesson is about."
     else:
         prev = script["segments"][first - 1]
-        said = " ".join(normalize_piece(p)["say"] for p in (prev.get("narration") or [])[-2:])
+        said = " ".join(normalize_piece(p)["say"] for p in narration(prev)[-2:])
         prompt += (f"\nThe previous segment ({prev['id']}, {prev['title']}) ends with: \"{said[-400:]}\" - continue "
                    "naturally, do not welcome again." if said else
                    f"\nThe previous segment is {prev['id']} ({prev['title']}): continue naturally, do not welcome again.")
@@ -376,7 +408,7 @@ def write_task(work, ids, note=""):
         sid = args.get("id")
         rest = [x for x in ids if x != sid and not subs.accepted.get(x)]
         hint = f"go on with segment {rest[0]}." if rest else "call finish."
-        return subs.submit(sid, args.get("narration"), args.get("code"), hint)
+        return subs.submit(sid, args.get("blocks"), hint)
 
     def finish(args):
         pending = subs.pending()
@@ -390,12 +422,11 @@ def write_task(work, ids, note=""):
 
     tools = material_tools(work) + [
         frame_tool(work, ids, final=False),
-        Tool("submit_segment", "Submit the narration and scene code of one segment: checked, rendered as a "
-             "low-resolution preview and saved if it renders. You get the frames back.",
-             {"type": "object", "properties": {
-                 "id": {"type": "string"},
-                 "narration": {"type": "array", "items": {"anyOf": [{"type": "string"}, {"type": "object"}]}},
-                 "code": {"type": "string"}}, "required": ["id", "narration", "code"]}, submit),
+        define_template_tool(work),
+        Tool("submit_segment", "Submit the scene of one segment as template blocks, each with its narration: "
+             "checked, rendered as a low-resolution preview and saved if it renders. You get the frames back.",
+             {"type": "object", "properties": {"id": {"type": "string"}, "blocks": BLOCKS_SCHEMA},
+              "required": ["id", "blocks"]}, submit),
         Tool("finish", "Finish the task (when every segment is accepted).",
              {"type": "object", "properties": {"notes": {"type": "string"}}}, finish),
     ]
@@ -407,12 +438,19 @@ def review_task(work, ids):
     script = work.script
     segs = [find_segment(script, sid) for sid in ids]
     system = prompts.compose("role", "review", "rules/teaching", "rules/writing", "rules/narration_format",
-                             "rules/scene_api", api=scene_api())
+                             "rules/scenes", templates=templates_reference(work.lesson), api=scene_api())
     blocks = []
     for seg in segs:
-        code = work.lesson.scene_file(seg["id"]).read_text()
-        blocks.append(segment_brief(work, seg, with_text=False) + f"\nNarration:\n{numbered(seg['narration'])}"
-                      f"\nScene code:\n```python\n{code}\n```")
+        if seg.get("blocks"):
+            scene = "Blocks:\n" + json.dumps(seg["blocks"], ensure_ascii=False, indent=1)
+        else:
+            scene = (f"Narration:\n{numbered(narration(seg))}\nScene code (an older segment written as code; to change it, "
+                     f"replace it with blocks):\n```python\n{work.lesson.scene_file(seg['id']).read_text()}\n```")
+        blocks.append(segment_brief(work, seg, with_text=False) + "\n" + scene)
+    custom = sorted(work.lesson.templates.glob("*.py")) if work.lesson.templates.is_dir() else []
+    if custom:
+        blocks.append("Templates of this lesson (yours, editable with define_template):\n" + "\n\n".join(
+            f"```python\n{f.read_text()}\n```" for f in custom))
     prompt = settings_block(work) + f"\nTheme of the lesson: {theme_line(script)}" + \
         f"\n\nLESSON: {script['title']}\nVisual language: {script.get('visual_language') or '-'}" + \
         f"\n\nReview the segments {', '.join(ids)}.\n\n" + \
@@ -437,9 +475,7 @@ def review_task(work, ids):
         seg = find_segment(script, sid) if sid in ids else None
         if seg is None:
             return ToolResult([f"Choose a segment among {', '.join(ids)}."], error=True)
-        narration = args.get("narration") or seg["narration"]
-        code = args.get("code") or work.lesson.scene_file(sid).read_text()
-        result = subs.submit(sid, narration, code, "go on with the review or call finish.")
+        result = subs.submit(sid, args.get("blocks"), "go on with the review or call finish.")
         if not result.error and sid not in changed:
             changed.append(sid)
         return result
@@ -453,12 +489,11 @@ def review_task(work, ids):
         Tool("view_final", "Frames of the final video of one segment, with the automatic warnings.",
              {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}, view_final),
         frame_tool(work, ids, final=True),
-        Tool("replace_segment", "Replace the code and/or the narration of a segment (omitted = unchanged): "
-             "checked, previewed and saved like when writing it.",
-             {"type": "object", "properties": {
-                 "id": {"type": "string"},
-                 "narration": {"type": "array", "items": {"anyOf": [{"type": "string"}, {"type": "object"}]}},
-                 "code": {"type": "string"}}, "required": ["id"]}, replace),
+        define_template_tool(work),
+        Tool("replace_segment", "Replace the blocks of a segment (all of them, narration included): checked, "
+             "previewed and saved like when writing it.",
+             {"type": "object", "properties": {"id": {"type": "string"}, "blocks": BLOCKS_SCHEMA},
+              "required": ["id", "blocks"]}, replace),
         Tool("finish", "Finish the review.", {"type": "object", "properties": {"notes": {"type": "string"}}}, finish),
     ]
     return make_task(work, "review", f"review {', '.join(ids)}", system, prompt, tools, max_turns=60), changed

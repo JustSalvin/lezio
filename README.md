@@ -85,6 +85,7 @@ change the instructions, rewrite from scratch.
 ./lezio build <lesson>                                    # after editing the lesson by hand
 ./lezio config                                            # change the configuration with menus
 ./lezio themes                                            # visual themes;  --preview NAME to see one
+./lezio templates                                         # scene templates;  --demo NAME --open to see one
 ./lezio tts                                               # TTS engines, options and voices
 ./lezio tts --try "Ciao a tutti." --voice it_male --play
 ./lezio help tools                                        # low-level commands
@@ -97,6 +98,12 @@ up, an animation of a process, a worked example written step by step, a comparis
 original figure — following the teaching guidelines in [docs/teaching-guidelines.md](docs/teaching-guidelines.md)
 (the agent's version is `src/lezio/agent/prompts/rules/teaching.md`). Anything specific you want goes in
 the instructions; they take priority over the guidelines.
+
+Scenes are built from **templates** filled with data (title cards, questions, bullets, definitions,
+flows, cycles, trees, timelines, comparisons, analogies, misconceptions, derivations, worked examples,
+tables, charts, function plots, arrays, code, original pages and figures, ...): `./lezio templates` lists
+them, `./lezio templates --demo NAME --open` shows one. When none fits, the agent writes its own template
+for the lesson. Your own templates go in `templates/` (see AGENTS.md): the agent sees them with the others.
 
 The **visual style** (colors, fonts, sizes) is the house **theme**, a file in `themes/`: `light`
 (default), `dark`, `chalkboard`, `whiteboard`, `paper`, or your own — copy `themes/light.toml` to
@@ -121,7 +128,7 @@ Only stable configuration; per-video choices are never here. Edit it by hand or 
 |---|---|
 | `[tts]`, `[tts.<engine>]` | speech engine (`voxtral` local, `edge` online) and its options: voice, expressiveness, model |
 | `[narration]` | language of narration and on-screen texts, pause between pieces |
-| `[agent]` | LLM backend, **model** (`opus`, `sonnet`, `haiku` or a full id) and **effort**; optional `[agent.plan]`, `[agent.write]`, `[agent.review]` overrides |
+| `[agent]` | LLM backend, **model** (`sonnet` by default, `opus`, `haiku` or a full id) and **effort**; optional `[agent.plan]`, `[agent.write]`, `[agent.review]` overrides |
 | `[video]` | house **theme** (a file in `themes/`), resolution and frame rate |
 | `[tuning]` | segments per agent task, previews per segment, render timeout, parallel renders, image sizes |
 
@@ -130,11 +137,10 @@ Changing the voice regenerates the narration of a lesson the next time it is bui
 
 ## How a lesson is made
 
-A lesson is an ordered list of **segments**. A segment has a narration (a list of short pieces, one audio
-file each) and a **scene**: Python code written by the agent for that segment (`lessons/<id>/scenes/`),
-rendered with Manim in sync with the narration. Scene code uses a small helper library (`lezio.scene`:
-voice sync, house style and themes, access to pages and figures of the material, optional layouts) and
-is checked before it runs (only safe imports, no files, a time limit). The plan gives every segment a
+A lesson is an ordered list of **segments**. A segment is a list of **blocks**: a template, its data, a
+title and the narration pieces said meanwhile (one audio file each), rendered with Manim in sync with the
+voice. Templates written by the agent for a lesson (`lessons/<id>/templates/`) are checked before they
+run (only safe imports, no files, a time limit). The plan gives every segment a
 goal, its sources, a length (from the depth and the amount of material) and its main visual idea, and
 fixes a visual language for the whole lesson (the same concept always gets the same color and symbol).
 

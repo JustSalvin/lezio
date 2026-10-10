@@ -110,8 +110,8 @@ def heading(text, size=None, color=None):
 
 
 def wrap(text, width=40):
-    """Insert line breaks so that a long sentence fits (width in characters)."""
-    return "\n".join(textwrap.wrap(text, width))
+    """Insert line breaks so that a long sentence fits (width in characters; words are never split)."""
+    return "\n".join(textwrap.wrap(text, width, break_long_words=False, break_on_hyphens=False))
 
 
 def fit(mobject, width=None, height=None):
@@ -124,15 +124,26 @@ def fit(mobject, width=None, height=None):
 
 
 # ------------------------------------------------------------------ building blocks
-def box(text, w=2.9, h=1.1, size=30, color=None, fill=None, bold=True, font=None):
-    """Rounded box with centered text (the text shrinks to fit); PRIMARY on PRIMARY_SOFT unless given.
-    Returns VGroup(rectangle, text)."""
+def box(text, w=2.9, h=1.1, size=None, color=None, fill=None, bold=True, font=None):
+    """Rounded box with centered text; PRIMARY on PRIMARY_SOFT unless given. A text too wide goes on more
+    lines (centered) before it shrinks. size: TEXT_SIZE * 0.85 unless given. Returns VGroup(rectangle, text)."""
     color, fill = color or PRIMARY, fill or PRIMARY_SOFT
+    size = size or round(TEXT_SIZE * 0.85)
     r = RoundedRectangle(width=w, height=h, corner_radius=0.18, stroke_color=color, stroke_width=3,
                          fill_color=fill, fill_opacity=1)
-    t = T(text, size, color, bold=bold, font=font, line_spacing=0.8).move_to(r)
+    t = T(text, size, color, bold=bold, font=font)
+    if t.width > w - 0.3 and " " in text.strip():
+        for n in range(2, 4):                        # 2 or 3 centered lines
+            width = max(len(text) // n + 1, max(len(x) for x in text.split()))
+            lines = textwrap.wrap(text, width, break_long_words=False)
+            if len(lines) > n:
+                continue
+            g = VGroup(*[T(x, size, color, bold=bold, font=font) for x in lines]).arrange(DOWN, buff=0.12)
+            if g.width <= w - 0.3 or n == 3:
+                t = g
+                break
     fit(t, w - 0.3, h - 0.2)
-    return VGroup(r, t)
+    return VGroup(r, t.move_to(r))
 
 
 def arrow(start, end, color=None, double=False, width=5):

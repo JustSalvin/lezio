@@ -23,8 +23,11 @@ from ..scene import style
 from ..scene.style import FRAME_HEIGHT, FRAME_WIDTH, apply_theme
 from ..settings import lesson_theme
 from ..scene.sync import Steps
-from ..script import estimate_seconds, find_segment, load_script, normalize_piece, piece_key, scene_name
+from ..script import estimate_seconds, find_segment, load_script, narration, normalize_piece, piece_key, scene_name
 from ..validate import check_scene_code
+
+MIN_FONT_SIZE = 20          # smaller texts are hard to read in the video
+
 
 class SceneError(Exception):
     pass
@@ -45,7 +48,7 @@ def _box(m):
 
 
 def layout_warnings(scene):
-    """Texts on screen now that are cut off by the frame or overlap another text."""
+    """Texts on screen now that are too small, cut off by the frame or overlapping another text."""
     texts = []
     for top in scene.mobjects:
         for m in top.get_family():
@@ -53,6 +56,10 @@ def layout_warnings(scene):
                 texts.append(m)
     out = []
     fw, fh = FRAME_WIDTH / 2, FRAME_HEIGHT / 2
+    small = [m for m in texts if getattr(m, "font_size", 99) < MIN_FONT_SIZE]
+    if small:
+        out.append(f"text {_label(small[0])} is too small to read (size {small[0].font_size:.0f}): shorten it, "
+                   "split the content or use fewer elements" + (f" ({len(small)} small texts)" if len(small) > 1 else ""))
     for m in texts:
         x0, y0, x1, y1 = _box(m)
         outside = max(-fw - x0, x1 - fw, -fh - y0, y1 - fh)
@@ -76,6 +83,14 @@ def scene_error(e, code_path):
     return (f"{where} -> " if where else "") + f"{type(e).__name__}: {e}"
 
 
+def template_error(e, block_index, name):
+    """A short error message for a block, pointing at lines of the agent's template files if involved."""
+    frames = [f for f in traceback.extract_tb(e.__traceback__) if "/templates/" in f.filename
+              and "/src/lezio/" not in f.filename]
+    where = "; ".join(f"{Path(f.filename).stem} line {f.lineno}: {(f.line or '').strip()}" for f in frames[-2:])
+    return f"block {block_index} ({name}): " + (f"{where} -> " if where else "") + f"{type(e).__name__}: {e}"
+
+
 class SegmentScene(Scene):
     def construct(self):
         env = os.environ
@@ -90,26 +105,48 @@ class SegmentScene(Scene):
             if env.get("LEZIO_REPORT"):
                 Path(env["LEZIO_REPORT"]).write_text(json.dumps(report, ensure_ascii=False, indent=1))
 
+    def run_blocks(self, lesson, blocks, steps, report):
+        from ..scene import templates
+        templates.load_library()
+        try:
+            templates.load_lesson_templates(lesson)
+        except Exception as e:
+            report["error"] = f"the lesson's templates cannot be loaded: {type(e).__name__}: {e}"
+            raise
+        material = SceneMaterial(lesson)
+        index = {"k": 0}
+        original = templates.REGISTRY.copy()
+        try:
+            templates.run_blocks(self, steps, material, blocks, on_block=lambda k: index.update(k=k))
+        except Exception as e:
+            report["error"] = template_error(e, index["k"], blocks[index["k"]].get("template"))
+            raise
+        finally:
+            templates.REGISTRY.clear()
+            templates.REGISTRY.update(original)
+
     def run_segment(self, lesson, env, report):
         script = load_script(lesson.script)
         settings = script["settings"]
         if env.get("LEZIO_DRAFT"):
             draft = json.loads(Path(env["LEZIO_DRAFT"]).read_text())
-            segment, code_path = draft["segment"], Path(draft["code"])
+            segment = draft["segment"]
+            code_path = Path(draft["code"]) if draft.get("code") else None
         else:
             segment = find_segment(script, env["LEZIO_SEGMENT"])
             if segment is None:
                 raise SceneError(f"segment {env['LEZIO_SEGMENT']} is not in the script")
-            code_path = lesson.scene_file(scene_name(segment))
-        code = code_path.read_text()
-        problems = check_scene_code(code)
-        if problems:
-            report["error"] = "scene code rejected: " + "; ".join(problems)
-            raise SceneError(report["error"])
+            code_path = None if segment.get("blocks") else lesson.scene_file(scene_name(segment))
+        code = code_path.read_text() if code_path else None
+        if code is not None:
+            problems = check_scene_code(code)
+            if problems:
+                report["error"] = "scene code rejected: " + "; ".join(problems)
+                raise SceneError(report["error"])
 
         meta = lesson.durations_meta()
         pieces = []
-        for i, p in enumerate(normalize_piece(x) for x in segment["narration"]):
+        for i, p in enumerate(normalize_piece(x) for x in narration(segment)):
             key = piece_key(segment["id"], i)
             wav, m = lesson.audio / f"{key}.wav", meta.get(key, {})
             if wav.exists() and m.get("text") == p["say"]:
@@ -132,19 +169,22 @@ class SegmentScene(Scene):
                                           "speech (the voice waits for them)")
             report["warnings"] += [f"end of piece {t.index}: {w}" for w in layout_warnings(self)]
 
-        report["theme"] = apply_theme(lesson_theme(script))     # before the scene code runs
+        report["theme"] = apply_theme(lesson_theme(script))     # before any scene or template code runs
         self.camera.background_color = style.BACKGROUND
-        namespace = {"__name__": f"lezio_scene_{segment['id']}", "__file__": str(code_path)}
         steps = Steps(self, pieces, settings["piece_gap"], on_start=on_start, on_end=on_end)
-        try:
-            exec(compile(code, str(code_path), "exec"), namespace)      # noqa: S102 - checked scene code
-            namespace["build"](self, steps, SceneMaterial(lesson))
-        except Exception as e:
-            report["error"] = scene_error(e, code_path)
-            raise
+        if code is None:
+            self.run_blocks(lesson, segment["blocks"], steps, report)
+        else:
+            namespace = {"__name__": f"lezio_scene_{segment['id']}", "__file__": str(code_path)}
+            try:
+                exec(compile(code, str(code_path), "exec"), namespace)      # noqa: S102 - checked scene code
+                namespace["build"](self, steps, SceneMaterial(lesson))
+            except Exception as e:
+                report["error"] = scene_error(e, code_path)
+                raise
         report["steps_called"] = steps.i
         if steps.i < len(pieces):
-            report["warnings"].append(f"build called steps() {steps.i} times for {len(pieces)} narration pieces: "
+            report["warnings"].append(f"the scene used {steps.i} of {len(pieces)} narration pieces: "
                                       "the last pieces play over a still screen")
         steps.finish()
         self.wait(0.5)

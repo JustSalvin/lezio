@@ -11,7 +11,7 @@ import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ..config import CONFIG, FFMPEG, MANIM, OUTPUT, PACKAGE, SUBPROCESS_ENV as ENV, THEMES
+from ..config import CONFIG, FFMPEG, MANIM, OUTPUT, PACKAGE, ROOT, SUBPROCESS_ENV as ENV, THEMES
 from ..script import find_segment, load_script, pieces, scene_name
 from ..settings import lesson_theme
 
@@ -84,8 +84,10 @@ def step_sheet(mp4, report, png, fps, width=1440):
 
 # ------------------------------------------------------------------ change detection
 def runtime_code():
-    files = sorted((PACKAGE / "scene").glob("*.py")) + [PACKAGE / "video" / "scene_runner.py",
-                                                         PACKAGE / "material" / "__init__.py"]
+    files = sorted((PACKAGE / "scene").rglob("*.py")) + [PACKAGE / "video" / "scene_runner.py",
+                                                          PACKAGE / "material" / "__init__.py"]
+    user = ROOT / "templates"
+    files += sorted(user.glob("*.py")) if user.is_dir() else []
     h = hashlib.sha1()
     for f in files:
         h.update(f.read_bytes())
@@ -104,7 +106,9 @@ def fingerprint(lesson, script, segment):
     for key, _, _ in pieces(segment):
         h.update(f"{key}:{meta.get(key, {}).get('duration')}".encode())
     path = lesson.scene_file(scene_name(segment))
-    h.update(path.read_bytes() if path.exists() else b"")
+    h.update(path.read_bytes() if path.exists() and not segment.get("blocks") else b"")
+    for f in sorted(lesson.templates.glob("*.py")) if lesson.templates.is_dir() else []:
+        h.update(f.read_bytes())                      # the agent's templates of the lesson
     h.update(runtime_code().encode())
     if lesson.index.exists():
         index = json.loads(lesson.index.read_text())
@@ -168,15 +172,19 @@ def run_scene(lesson, segment_id, final, name, draft=None, estimate=False):
     return found[0], report
 
 
-def preview(lesson, segment, code):
+def preview(lesson, segment, code=None):
     """Render a submission (not saved yet) at low resolution, with estimated timing where the voice does not
-    exist yet. Returns (step sheet or None, report); raises RenderError."""
+    exist yet: template blocks (segment["blocks"]) or scene code. Returns (step sheet or None, report);
+    raises RenderError."""
     drafts = lesson.agent / "drafts"
     drafts.mkdir(parents=True, exist_ok=True)
-    code_path = drafts / f"{segment['id']}.py"
-    code_path.write_text(code)
+    code_path = None
+    if code is not None:
+        code_path = drafts / f"{segment['id']}.py"
+        code_path.write_text(code)
     draft = drafts / f"{segment['id']}.json"
-    draft.write_text(json.dumps({"segment": segment, "code": str(code_path)}, ensure_ascii=False))
+    draft.write_text(json.dumps({"segment": segment, "code": str(code_path) if code_path else None},
+                                ensure_ascii=False))
     name = f"preview_{segment['id']}"
     mp4, report = run_scene(lesson, segment["id"], final=False, name=name, draft=draft, estimate=True)
     try:

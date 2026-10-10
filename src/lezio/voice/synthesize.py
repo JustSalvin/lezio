@@ -14,7 +14,7 @@ from pathlib import Path
 import soundfile as sf
 
 from ..lesson import Lesson
-from ..script import audio_pieces, load_script
+from ..script import audio_pieces, load_script, narration
 from ..settings import tts_label, tts_options
 from . import engines
 
@@ -59,7 +59,7 @@ def synthesize_lesson(lesson_id, segment_ids):
     lesson = Lesson(lesson_id)
     script = load_script(lesson.script)
     wanted = set(filter(None, segment_ids.split(","))) if segment_ids else None
-    segments = [s for s in script["segments"] if s.get("narration") and (wanted is None or s["id"] in wanted)]
+    segments = [s for s in script["segments"] if narration(s) and (wanted is None or s["id"] in wanted)]
     todo = stale_pieces(lesson, segments)
     emit(event="start", total=len(todo), tts=tts_label())
     lesson.audio.mkdir(parents=True, exist_ok=True)

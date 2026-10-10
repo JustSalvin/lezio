@@ -30,8 +30,9 @@ FORBIDDEN_ATTRIBUTES = {
 FORBIDDEN_KEYWORDS = {"file_name", "filename", "code_file", "svg_file", "image_file"}
 
 
-def check_scene_code(code):
-    """Static checks of scene code. Returns a list of problems (empty = fine)."""
+def check_scene_code(code, entry="build"):
+    """Static checks of scene code (entry "build") or of a template (entry = the template name).
+    Returns a list of problems (empty = fine)."""
     try:
         tree = ast.parse(code)
     except SyntaxError as e:
@@ -67,13 +68,23 @@ def check_scene_code(code):
             bad(node, "dunder names are not allowed")
 
     problems.sort(key=lambda p: int(p.split(":")[0][5:]) if p[5:].split(":")[0].isdigit() else 0)
-    builds = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "build"]
-    if not builds:
-        problems.append("no top-level function `def build(scene, steps, material):`")
+    found = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == entry]
+    if entry == "build":
+        if not found:
+            problems.append("no top-level function `def build(scene, steps, material):`")
+        else:
+            args = [a.arg for a in found[0].args.args]
+            if args[:3] != ["scene", "steps", "material"]:
+                problems.append(f"build must be `def build(scene, steps, material):` (got build({', '.join(args)}))")
+    elif not found:
+        problems.append(f"no top-level function `def {entry}(ctx, steps, ...)` decorated with @template(...)")
     else:
-        args = [a.arg for a in builds[0].args.args]
-        if args[:3] != ["scene", "steps", "material"]:
-            problems.append(f"build must be `def build(scene, steps, material):` (got build({', '.join(args)}))")
+        fn = found[0]
+        if [a.arg for a in fn.args.args][:2] != ["ctx", "steps"]:
+            problems.append(f"the template must be `def {entry}(ctx, steps, ...)`")
+        if not any((isinstance(d, ast.Call) and getattr(d.func, "id", "") == "template")
+                   or (isinstance(d, ast.Name) and d.id == "template") for d in fn.decorator_list):
+            problems.append(f"{entry} must be decorated with @template(...)")
     if not problems:
         try:
             compile(tree, "<scene>", "exec")
@@ -126,6 +137,41 @@ def check_narration(narration):
     return errors, warnings
 
 
+# ------------------------------------------------------------------ template blocks
+BLOCK_KEYS = {"template", "title", "args", "say", "keep"}
+
+
+def check_blocks(blocks, lesson=None):
+    """Template blocks of a segment. Returns (errors, warnings)."""
+    from .scene import templates
+    if not isinstance(blocks, list) or not blocks:
+        return ["blocks must be a non-empty list"], []
+    errors, warnings = [], []
+    for k, b in enumerate(blocks):
+        where = f"block {k}"
+        if not isinstance(b, dict):
+            errors.append(f"{where}: must be an object {{\"template\", \"title\", \"args\", \"say\"}}")
+            continue
+        unknown = set(b) - BLOCK_KEYS
+        if unknown:
+            errors.append(f"{where}: unknown keys {sorted(unknown)} (allowed: {', '.join(sorted(BLOCK_KEYS))})")
+        name = b.get("template")
+        tpl = templates.find(name, lesson) if isinstance(name, str) else None
+        if tpl is None:
+            errors.append(f"{where}: unknown template {name!r}")
+        else:
+            errors += [f"{where} ({name}): {p}" for p in templates.check_args(tpl, b.get("args", {}))]
+        if b.get("title") is not None and not isinstance(b.get("title"), str):
+            errors.append(f"{where}: title must be a text")
+        if not b.get("say"):
+            errors.append(f"{where}: \"say\" must list the narration pieces of the block (at least one)")
+        else:
+            e, w = check_narration(b["say"])
+            errors += [f"{where} {x}" for x in e]
+            warnings += [f"{where} {x}" for x in w]
+    return errors, warnings
+
+
 # ------------------------------------------------------------------ the whole script
 def check_settings(settings):
     errors = []
@@ -139,12 +185,14 @@ def check_settings(settings):
 
 
 def check_script(lesson, script, material=None):
-    """Return (errors, warnings) for a whole script: settings, segments, narration, scene code, refs."""
+    """Return (errors, warnings) for a whole script: settings, segments, blocks, narration, scene code, refs."""
     from .material import Material, RefError
     from .script import scene_name
     material = material or Material(lesson)
     errors = check_settings(script["settings"])
     warnings = []
+    for path in sorted(lesson.templates.glob("*.py")) if lesson.templates.is_dir() else []:
+        errors += [f"template {path.stem}: {p}" for p in check_scene_code(path.read_text(), entry=path.stem)]
     if script.get("theme"):
         from .config import THEMES
         if not (THEMES / f"{script['theme']}.toml").exists():
@@ -163,6 +211,11 @@ def check_script(lesson, script, material=None):
                 material.resolve(ref)
             except RefError as e:
                 errors.append(f"{sid}: sources: {e}")
+        if seg.get("blocks"):
+            e, w = check_blocks(seg["blocks"], lesson)
+            errors += [f"{sid}: {x}" for x in e]
+            warnings += [f"{sid}: {x}" for x in w]
+            continue
         if not seg.get("narration"):
             warnings.append(f"{sid}: not written yet")
             continue

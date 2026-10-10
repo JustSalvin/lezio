@@ -1,8 +1,9 @@
 """A lesson = one video project, stored in lessons/<id>/.
 
     lesson.json     the study material the lesson is made from: {"sources": [paths], "created": ...}
-    script.json     per-video choices, plan and segments (narration pieces + scene name)
-    scenes/         scene code of each segment (scenes/<segment>.py, written by the agent)
+    script.json     per-video choices, plan and segments (template blocks with their narration)
+    templates/      templates written by the agent for this lesson (templates/<name>.py)
+    scenes/         scene code of segments written as code (older lessons)
     build/          regenerable cache (material, audio, renders, contact sheets, agent log, logs)
 
 Pure Python (no heavy imports): used by both virtual environments.
@@ -26,7 +27,8 @@ def lesson_exists(lesson_id):
 
 
 def all_lessons():
-    return sorted(p.parent.name for p in LESSONS.glob("*/lesson.json"))
+    """Lesson ids (folders starting with "_" are internal, e.g. the template demos)."""
+    return sorted(p.parent.name for p in LESSONS.glob("*/lesson.json") if not p.parent.name.startswith("_"))
 
 
 def stored_path(path: Path) -> str:
@@ -47,6 +49,7 @@ class Lesson:
         self.info = json.loads((self.dir / "lesson.json").read_text())
         self.script = self.dir / "script.json"
         self.scenes = self.dir / "scenes"
+        self.templates = self.dir / "templates"
         self.build = self.dir / "build"
         self.material = self.build / "material"      # ingested study material + index.json
         self.index = self.material / "index.json"

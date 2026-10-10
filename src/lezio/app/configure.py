@@ -17,7 +17,7 @@ from . import ui
 from .wizard import STYLE, ask
 
 EFFORTS = ["low", "medium", "high", "xhigh", "max"]
-MODELS = [("opus", "the most capable"), ("sonnet", "faster, lighter on usage"), ("haiku", "the fastest")]
+MODELS = [("sonnet", "fast and capable (default)"), ("opus", "the most capable, slower"), ("haiku", "the fastest")]
 TASKS = {"plan": "planning the lesson", "write": "writing narration and scenes", "review": "final review"}
 RESOLUTIONS = [(1920, 1080), (1280, 720), (2560, 1440), (3840, 2160)]
 FPS = [24, 25, 30, 60]

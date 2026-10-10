@@ -15,7 +15,8 @@ TASK: plan the lesson.
      {"title", "goal": what the viewer must understand by its end, "sources": refs of the material it
       covers (ranges allowed, e.g. "slides.pdf#p3-5"), "minutes": its length, "visual": how its scene
       teaches visually - the main representation (a diagram that builds up, an animation of a process, a
-      worked example written step by step, a comparison, an original figure, ...) and why it fits};
+      worked example written step by step, a comparison, an original figure, ...), the templates that fit
+      it, and why};
    - skipped: [{"ref", "reason"}] for the material in scope that no segment covers (live polls or quizzes,
      repeated or empty pages, minor details at depth 4, whatever the user's instructions exclude);
    - theme: only if the user's instructions ask for a different look than the house theme ($house): one of

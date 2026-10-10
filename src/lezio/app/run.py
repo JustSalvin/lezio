@@ -2,7 +2,7 @@
 
     1. material   new or changed sources -> build/material (pages, text, figures)     program
     2. plan       title, outline, segments (sources, goal, length, visual idea)          agent task (plan)
-    3. write      narration + scene code of a few segments at a time, with previews     agent tasks (write)
+    3. write      template blocks + narration of a few segments at a time, with previews agent tasks (write)
     4. voice      speech synthesis with the configured TTS engine                        program
     5. video      render the segments that changed                                        program
     6. review     final frames judged, broken segments fixed                             agent task (review)
@@ -26,7 +26,7 @@ from ..agent import tasks
 from ..agent.backends import get_backend, task_options
 from ..config import CONFIG, INPUT, ROOT
 from ..lesson import Lesson, all_lessons, lesson_exists, slugify, stored_path
-from ..script import empty_script, find_segment, is_written, load_script, save_script
+from ..script import empty_script, find_segment, is_written, load_script, narration, save_script
 from ..settings import DEPTHS, PLAN_CHOICES, lesson_theme, merge_settings, tts_label, tts_options
 from ..validate import check_script
 from ..video import render
@@ -126,7 +126,7 @@ class Run:
             flags["focus"] = self.parse_focus(a.focus, base.get("focus", {}))
         self.rewrite = bool(getattr(a, "rewrite", False))
 
-        written = [s for s in saved["segments"] if s.get("narration")]
+        written = [s for s in saved["segments"] if narration(s)]
         if self.interactive and (self.is_new or not saved["segments"]) and "depth" not in flags:
             self.ask_focus(flags, base)
             flags.setdefault("depth", wizard.depth(base["depth"]))
@@ -194,7 +194,7 @@ class Run:
     def summary(self):
         s = self.settings
         segs = [] if self.rewrite else self.saved["segments"]
-        written = [x for x in segs if x.get("narration")]
+        written = [x for x in segs if narration(x)]
         if self.replan:
             script = "a new plan" + (f"  [warn](the current lesson, {len(self.saved['segments'])} segments, is "
                                      "backed up and rewritten)[/]" if self.rewrite and self.saved["segments"] else "")
@@ -405,7 +405,7 @@ class Run:
                                                                         for sid in group)))
                 st.advance(len(group))
             self.step = None
-            pieces = sum(len(find_segment(self.script, sid)["narration"]) for sid in todo)
+            pieces = sum(len(narration(find_segment(self.script, sid))) for sid in todo)
             st.done(f"{len(todo)} segments · {pieces} narration pieces")
 
     # ================================================================ 4-7
@@ -538,7 +538,8 @@ def redo(a):
         run.backup()
         for sid in ids:
             seg = find_segment(run.script, sid)
-            seg.pop("narration", None)
+            for key in ("narration", "blocks", "scene"):
+                seg.pop(key, None)
             lesson.scene_file(sid).unlink(missing_ok=True)
         run.save()
         run.write(only=ids)

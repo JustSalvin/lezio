@@ -234,3 +234,109 @@ def tool_join(a):
 def tool_scene_api(a):
     from ..agent.tasks import scene_api
     ui.console.print(ui.escape(scene_api()))
+
+
+# ------------------------------------------------------------------ templates
+DEMO_LESSON = "_templates"
+
+
+def demo_lesson():
+    """The internal lesson used to render template examples (a generated PDF page and picture as material)."""
+    from ..config import LESSONS
+    from ..lesson import lesson_exists
+    from ..script import empty_script, save_script
+    if not lesson_exists(DEMO_LESSON):
+        import pymupdf
+        from PIL import Image, ImageDraw, ImageFont
+        src = LESSONS / DEMO_LESSON / "sources"
+        src.mkdir(parents=True, exist_ok=True)
+        doc = pymupdf.open()
+        pg = doc.new_page(width=640, height=360)
+        pg.insert_text((40, 60), "Il sistema binario", fontsize=26, color=(0.08, 0.27, 0.63))
+        for k, line in enumerate(["Usiamo due simboli: 0 e 1", "Ogni cifra binaria si chiama bit",
+                                  "Con k bit si scrivono 2^k stringhe", "Il rumore non confonde i due livelli"]):
+            pg.insert_text((50, 110 + k * 32), "- " + line, fontsize=16)
+        for k, label in enumerate(["CPU", "Memoria", "I/O"]):
+            r = pymupdf.Rect(400 + (k % 2) * 110, 120 + (k // 2) * 90, 490 + (k % 2) * 110, 170 + (k // 2) * 90)
+            pg.draw_rect(r, color=(0.08, 0.27, 0.63), fill=(0.89, 0.93, 0.98), width=1.5)
+            pg.insert_text((r.x0 + 12, r.y0 + 30), label, fontsize=14)
+        pg.draw_line((490, 145), (510, 145), color=(0.3, 0.3, 0.3), width=1.5)
+        pg.draw_line((445, 170), (445, 210), color=(0.3, 0.3, 0.3), width=1.5)
+        doc.save(src / "demo.pdf")
+        im = Image.new("RGB", (1200, 700), "white")
+        d = ImageDraw.Draw(im)
+        font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 44)
+        d.ellipse([150, 150, 550, 550], outline=(20, 70, 160), width=8)
+        d.ellipse([650, 150, 1050, 550], outline=(232, 89, 12), width=8)
+        d.text((290, 320), "A", fill=(20, 70, 160), font=font)
+        d.text((830, 320), "B", fill=(232, 89, 12), font=font)
+        im.save(src / "figure.png")
+        lesson = Lesson.create(DEMO_LESSON, [src / "demo.pdf", src / "figure.png"])
+        mat.ingest(lesson)
+        save_script(lesson.script, empty_script())
+    return Lesson(DEMO_LESSON)
+
+
+def demo_template(lesson, name):
+    """Render the example of a template. Returns (sheet, report, problems)."""
+    from ..scene import templates as tpls
+    from ..validate import check_blocks
+    tpl = tpls.find(name, lesson)
+    ex = tpl.example or {}
+    block = {"template": name, "args": ex.get("args", {}), "say": ex.get("say") or ["Esempio."]}
+    if ex.get("title"):
+        block["title"] = ex["title"]
+    errors, _ = check_blocks([block], lesson)
+    if errors:
+        return None, {}, errors
+    try:
+        sheet, report = render.preview(lesson, {"id": name, "blocks": [block]})
+    except render.RenderError as e:
+        return None, e.report, [str(e)]
+    return sheet, report, []
+
+
+def templates(a):
+    from concurrent.futures import ThreadPoolExecutor
+    from ..scene import templates as tpls
+    tpls.load_library()
+    for f, err in tpls.LOAD_ERRORS:
+        ui.console.print(f"[err]cannot load {ui.escape(f)}[/]: {ui.escape(err)}")
+    if not a.demo:
+        table = Table(box=None, padding=(0, 1), show_header=False)
+        for cat, label in tpls.CATEGORIES.items():
+            group = [t for t in tpls.REGISTRY.values() if t.category == cat]
+            if group:
+                table.add_row(f"[bold]{label}[/]", "", "")
+                for t in group:
+                    src = "" if t.source == "built-in" else f" [muted]({t.source})[/]"
+                    table.add_row("", f"[accent]{t.name}[/]{src}", ui.escape(t.use_for))
+        ui.console.print(table)
+        ui.info(f"{len(tpls.REGISTRY)} templates · try one: ./lezio templates --demo NAME [--open] · all: --demo all")
+        ui.info("your own: a file in templates/ (see AGENTS.md, \"Template\")")
+        return
+    lesson = demo_lesson()
+    names = list(tpls.REGISTRY) if a.demo == "all" else [n.strip() for n in a.demo.split(",")]
+    unknown = [n for n in names if n not in tpls.REGISTRY]
+    if unknown:
+        ui.fail(f"unknown templates: {', '.join(unknown)}", "./lezio templates")
+    results = {}
+    with ui.step("Rendering template examples", total=len(names)) as st:
+        with ThreadPoolExecutor(CONFIG["tuning"]["parallel_jobs"]) as pool:
+            for name, res in zip(names, pool.map(lambda n: demo_template(lesson, n), names)):
+                results[name] = res
+                st.advance()
+        bad = [n for n, (_, _, p) in results.items() if p]
+        st.done(f"{len(names) - len(bad)} ok" + (f" · [err]{len(bad)} failed[/]" if bad else ""))
+    for name, (sheet, report, problems) in results.items():
+        mark = "[err]✗[/]" if problems else ("[warn]![/]" if report.get("warnings") else "[ok]✓[/]")
+        where = rel(sheet) if sheet else ""
+        ui.console.print(f" {mark} [bold]{name}[/]  [muted]{where}[/]")
+        for p in problems + report.get("warnings", []):
+            ui.console.print(f"     [muted]{ui.escape(str(p))}[/]")
+    if getattr(a, "open", False):
+        for sheet, _, _ in results.values():
+            if sheet:
+                subprocess.run(["open", str(sheet)])
+    if any(p for _, _, p in results.values()):
+        raise SystemExit(1)

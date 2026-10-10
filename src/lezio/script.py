@@ -5,12 +5,14 @@
      "title": "...", "outline": "...", "plan_key": "...", "theme": "" (a theme chosen for this lesson),
      "visual_language": "how key concepts look in every segment (colors by role, symbols, recurring diagrams)",
      "segments": [{"id": "s01", "title": "...", "goal": "...", "sources": ["slides.pdf#p1-3"], "minutes": 1.5,
-                   "narration": ["...", {"say": "...", "pause": 2}, "..."],
-                   "scene": "s01"}],
+                   "visual": "...",
+                   "blocks": [{"template": "bullets", "title": "...", "args": {...},
+                               "say": ["...", {"say": "...", "pause": 2}]}, ...]}],
      "skipped": [{"ref": "slides.pdf#p14", "reason": "live poll"}]}
 
-A segment is planned when it has id/title/goal/sources, written when it also has narration and its scene
-file (scenes/<scene>.py) exists. Every narration piece is one audio file, key "<segment>_<piece>".
+A segment is planned when it has id/title/goal/sources, written when it also has its blocks: templates
+filled with data, each with its narration (scene/templates). Older segments may instead have "narration"
+and a scene code file (scenes/<scene>.py). Every narration piece is one audio file, key "<segment>_<piece>".
 Pure Python (no heavy imports): used by both virtual environments.
 """
 import json
@@ -53,6 +55,13 @@ def normalize_piece(piece):
     return {"say": piece.get("say", ""), "pause": piece.get("pause", 0) or 0}
 
 
+def narration(segment):
+    """The narration pieces of a segment, in order (from its blocks, or the older "narration" list)."""
+    if segment.get("blocks"):
+        return [p for b in segment["blocks"] for p in (b.get("say") or [])]
+    return segment.get("narration") or []
+
+
 def piece_key(segment_id, i):
     return f"{segment_id}_{i:02d}"
 
@@ -60,7 +69,7 @@ def piece_key(segment_id, i):
 def pieces(segment):
     """[(key, text, pause_after)] for the narration of one segment."""
     return [(piece_key(segment["id"], i), p["say"], p["pause"])
-            for i, p in enumerate(normalize_piece(x) for x in segment.get("narration") or [])]
+            for i, p in enumerate(normalize_piece(x) for x in narration(segment))]
 
 
 def audio_pieces(segments):
@@ -80,6 +89,8 @@ def scene_name(segment):
 
 
 def is_written(lesson, segment):
+    if segment.get("blocks"):
+        return all(b.get("say") for b in segment["blocks"])
     return bool(segment.get("narration")) and lesson.scene_file(scene_name(segment)).exists()
 
 
