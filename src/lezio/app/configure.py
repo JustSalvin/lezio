@@ -22,6 +22,7 @@ RESOLUTIONS = [(1920, 1080), (1280, 720), (2560, 1440), (3840, 2160)]
 FPS = [24, 25, 30, 60]
 TUNING = {
     "segments_per_task": "segments written per agent task",
+    "voice_while_writing": "generate the voice of written segments while the next ones are written",
     "preview_rounds": "submissions (previews) allowed per segment while writing",
     "render_timeout_seconds": "a scene render taking longer is stopped",
     "review_group_size": "segments per review task",
@@ -232,7 +233,10 @@ def tuning_menu(doc):
                                                      for k, d in TUNING.items()] + [Choice("Back", BACK)])
         if key == BACK:
             return
-        t[key] = number(f"{key} ({TUNING[key]})", t.get(key, 1), minimum=1)
+        if isinstance(t.get(key), bool):
+            t[key] = select(key, [Choice("yes", True), Choice("no", False)], default=t.get(key))
+        else:
+            t[key] = number(f"{key} ({TUNING[key]})", t.get(key, 1), minimum=1)
 
 
 # ------------------------------------------------------------------ main menu

@@ -57,15 +57,16 @@ def warn(message):
     console.print(f"[warn]![/] {message}")
 
 
-def table(columns, rows, title=None):
+def table(columns, rows, title=None, wrap_last=True):
     """A list (lessons, voices, themes, templates, segments) in the same style everywhere.
     columns: names (a name starting with ">" is right-aligned); rows: lists of rich-markup strings."""
     t = Table(box=None, padding=(0, 2), header_style="key", show_header=any(columns),
               title=f"[bold]{title}[/]" if title else None, title_justify="left")
     for k, c in enumerate(columns):
         right, last = c.startswith(">"), k == len(columns) - 1
-        t.add_column(c.lstrip(">"), justify="right" if right else "left", no_wrap=not last,
-                     overflow="fold" if last else "ellipsis")
+        fold = last and wrap_last
+        t.add_column(c.lstrip(">"), justify="right" if right else "left", no_wrap=not fold,
+                     overflow="fold" if fold else "ellipsis", min_width=len(c.lstrip(">")) if not fold else None)
     for r in rows:
         t.add_row(*r)
     console.print(t)

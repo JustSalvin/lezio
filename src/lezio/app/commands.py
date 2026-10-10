@@ -37,7 +37,9 @@ def status(a):
         ("theme", house_theme()),
         ("voice", ui.escape(tts_label())),
         ("instructions", ui.escape(s["instructions"]) or "[muted]none[/]"),
-        ("video", rel(lesson.output) if lesson.output.exists() else "[muted]not assembled yet[/]"),
+        ("video", {"done": f"assembled → {rel(lesson.output)}",
+                   "outdated": "[warn]assembled, but the lesson changed since[/]",
+                   "none": "[muted]not assembled yet[/]"}[render.video_state(lesson, script)]),
     ], title="status")
     rows = []
     for seg in script["segments"]:
@@ -57,7 +59,7 @@ def status(a):
         title = seg["title"] if len(seg["title"]) <= 44 else seg["title"][:43] + "…"
         rows.append([f"[muted]{seg['id']}[/]", ui.escape(title), str(len(keys) or ""), voice_state, state])
     ui.table(["segment", "title", ">pieces", ">voice", "video"], rows)
-    if any(not is_written(lesson, x) for x in script["segments"]) or not lesson.output.exists():
+    if render.video_state(lesson, script) != "done":
         ui.hint(f"continue: ./lezio make {lesson.id}")
 
 
@@ -73,12 +75,13 @@ def lessons_list():
         script = load_script(lesson.script)
         segs = script["segments"]
         written = sum(1 for x in segs if is_written(lesson, x))
-        video = "[ok]✓[/]" if lesson.output.exists() else "[muted]—[/]"
+        video = {"done": "[ok]✓[/]", "outdated": "[warn]outdated[/]", "none": "[muted]—[/]"}[
+            render.video_state(lesson, script)]
         title = script["title"] if len(script["title"]) <= 34 else script["title"][:33] + "…"
         rows.append([f"[accent]{lid}[/]", ui.escape(title) or "[muted]not planned[/]",
                      f"{written}/{len(segs)}" if segs else "[muted]—[/]", str(script["settings"]["depth"]), video])
-    ui.table(["lesson", "title", ">written", ">depth", "video"], rows)
-    ui.info("videos in output/<lesson>.mp4")
+    ui.table(["lesson", "title", ">written", ">depth", "video   "], rows, wrap_last=False)
+    ui.info("video: ✓ assembled from the current lesson (output/<lesson>.mp4)")
     ui.hint("details: ./lezio status <lesson>     continue: ./lezio make <lesson>")
 
 

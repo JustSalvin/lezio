@@ -11,16 +11,23 @@ with an optional title and the narration pieces said while it is on screen:
 - "title": the screen title; it stays on screen while consecutive blocks keep the same title. Omit it for
   full-screen blocks (title_card, question, statement, page...).
 - Between blocks the previous content fades out; "keep": true keeps it (rarely needed).
-- Choose the template that teaches the content best (teaching guidelines), not the first that fits; vary
+- Build scenes from the LIBRARY templates below: they are tested, consistent and fast to use. Choose the
+  one that teaches the content best (teaching guidelines), combine several in a sequence of blocks, vary
   them along the lesson. Texts on screen are short (key words, labels, formulas), the voice explains.
+- A template of your own is the LAST RESORT: writing one takes much longer than filling a library template
+  and it is less polished. Write one only when no library template, alone or in a sequence of blocks, can
+  show the content - typically a specific animation of a process. First check: compare (side by side),
+  mapping (correspondences), translate (a transformation), table, flow, diagram, tree, cycle, timeline,
+  array (step-by-step states), derivation, worked_example, function_plot, figure and page (the original).
+  Templates already defined in this lesson are in the catalog: reuse them instead of writing similar ones.
 - The visual language of the lesson tells which theme colors mean what; templates already use the theme.
 
 TEMPLATES (name(arguments), when to use it, phases, an example):
 $templates
 
-YOUR OWN TEMPLATES
-When no template fits (a special animation, a process that must move, a diagram of its own), write one
-with define_template, then use it in blocks like any other. It is Python for Manim Community 0.22:
+YOUR OWN TEMPLATES (last resort)
+Only when no library template can show it (a special animation, a process that must move), write one
+with define_template, then use it in blocks like any other; make it general enough to reuse. It is Python for Manim Community 0.22:
 
 from lezio.scene import *
 

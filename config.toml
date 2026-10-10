@@ -46,7 +46,7 @@ effort = "high"
 [video]
 # House visual style: a theme file in themes/ (light, dark, chalkboard, whiteboard, paper, or your own).
 # Preview: ./lezio themes --preview <name>. A lesson can ask for another one in its instructions.
-theme = "light"
+theme = "dark"
 # Subtitles from the narration:
 #   "track"  = a track inside the MP4 that players turn on and off, plus output/<lesson>.srt
 #   "burned" = always visible, drawn into the picture      "off" = none
@@ -61,6 +61,8 @@ fps = 30
 [tuning]
 # Segments written per agent task (smaller = more focused tasks, more calls)
 segments_per_task = 2
+# Generate the voice of the segments already written while the agent writes the next ones
+voice_while_writing = true
 # How many times the agent may submit (and preview) each segment while writing it
 preview_rounds = 4
 # A scene render taking longer than this is stopped (seconds)

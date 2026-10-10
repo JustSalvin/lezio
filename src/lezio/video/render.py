@@ -4,11 +4,13 @@ A step sheet shows, for every narration piece, the frame in its middle and the f
 start of the sentence: it is what the agent looks at to judge a scene. Manim's working files are deleted
 as soon as a render is copied out, so build/ only keeps what is needed.
 """
+import functools
 import hashlib
 import json
 import re
 import shutil
 import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ..config import CONFIG, FFMPEG, MANIM, OUTPUT, PACKAGE, ROOT, SUBPROCESS_ENV as ENV, THEMES
@@ -83,6 +85,7 @@ def step_sheet(mp4, report, png, fps, width=1440):
 
 
 # ------------------------------------------------------------------ change detection
+@functools.lru_cache(maxsize=1)
 def runtime_code():
     files = sorted((PACKAGE / "scene").rglob("*.py")) + [PACKAGE / "video" / "scene_runner.py",
                                                           PACKAGE / "material" / "__init__.py"]
@@ -293,4 +296,21 @@ def join(lesson):
                     "-c:v", "libx264", "-crf", "20", "-preset", "medium", "-pix_fmt", "yuv420p",
                     "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-c:a", "aac", "-b:a", "160k", "-ar", "48000",
                     *extra, "-movflags", "+faststart", str(lesson.output)], check=True)
+    (lesson.build / "joined.json").write_text(json.dumps(
+        {"segments": [[s["id"], video_meta(lesson, s["id"]).get("fingerprint")] for s in script["segments"]],
+         "time": time.strftime("%Y-%m-%d %H:%M")}))
     return lesson.output, video_duration(lesson.output), lesson.output.stat().st_size
+
+
+def video_state(lesson, script):
+    """State of the lesson's final video, from the lesson itself (never from output/):
+    "done" (assembled from the current segments), "outdated" (assembled, then something changed),
+    "none" (never assembled)."""
+    path = lesson.build / "joined.json"
+    if not path.exists():
+        return "none"
+    joined = json.loads(path.read_text()).get("segments")
+    current = [[s["id"], video_meta(lesson, s["id"]).get("fingerprint")] for s in script["segments"]]
+    if joined != current or any(is_outdated(lesson, script, s) for s in script["segments"]):
+        return "outdated"
+    return "done"

@@ -14,7 +14,9 @@ audio already generated and videos already rendered are kept.
 """
 import hashlib
 import json
+import queue
 import shutil
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -378,8 +380,11 @@ class Run:
                 groups[-1].append(sid)
             else:
                 groups.append([sid])
+        background = BackgroundVoice(self.lesson) if CONFIG["tuning"].get("voice_while_writing", True) else None
         with ui.step("Writing the lesson", total=len(todo)) as st:
             self.step = st
+            if background is not None:
+                background.note = st.note
             for group in groups:
                 st.status(", ".join(group))
                 ids = list(group)
@@ -395,9 +400,14 @@ class Run:
                 st.note(f"{', '.join(group)} ✓  " + ui.escape(" · ".join(find_segment(self.script, sid)["title"]
                                                                         for sid in group)))
                 st.advance(len(group))
+                if background is not None:
+                    background.add(group)              # its voice is generated while the next ones are written
             self.step = None
             pieces = sum(len(narration(find_segment(self.script, sid))) for sid in todo)
             st.done(f"{len(todo)} segments · {pieces} narration pieces")
+        if background is not None:
+            background.note = None
+            background.finish()
 
     # ================================================================ 4-7
     def build(self, review=True):
@@ -439,6 +449,71 @@ class Run:
             rows.append(("agent model", ", ".join(sorted(self.models))))
         ui.console.print()
         ui.key_values(rows, title="[ok]done[/]")
+
+
+# ==================================================================== voice while writing
+class BackgroundVoice:
+    """Generates the voice of the segments already written while the agent writes the next ones.
+
+    Segments are queued when their write task ends (they are final for the moment) and voiced one group at
+    a time by the usual speech worker, so only new or changed pieces are generated. A failure does not stop
+    the writing: the voice step after it generates what is still missing and reports the error."""
+
+    def __init__(self, lesson):
+        self.lesson, self.queue, self.errors = lesson, queue.Queue(), []
+        self.generated, self.step, self.current, self.note = 0, None, None, None
+        self.thread = threading.Thread(target=self._work, daemon=True)
+        self.thread.start()
+
+    def add(self, ids):
+        self.queue.put(list(ids))
+
+    def _work(self):
+        while True:
+            ids = self.queue.get()
+            if ids is None:
+                return
+            self.current = ids
+            before = self.generated
+            try:
+                voice.synthesize_lesson(self.lesson, ids, on_event=self._event)
+                if self.note is not None:
+                    self.note(f"voice {', '.join(ids)} ✓  {self.generated - before} pieces")
+            except voice.VoiceError as e:
+                self.errors.append(str(e))
+            self.current = None
+
+    def _event(self, e):
+        if e["event"] == "piece":
+            self.generated += 1
+            if self.step is not None:
+                self.step.advance()
+                self.step.status(f"{e['key']} · {e['duration']:.1f}s")
+
+    def pending(self):
+        return self.current is not None or not self.queue.empty()
+
+    def finish(self):
+        """Wait for the queued segments (showing the progress) and stop the thread."""
+        if self.pending():
+            with ui.step("Generating the voice", total=0) as st:
+                self.step = st
+                st.set_total(sum(1 for _ in self._missing()) + self.generated)
+                st.advance(self.generated)
+                self.queue.put(None)
+                self.thread.join()
+                st.done(f"{self.generated} pieces, most of them while writing")
+        else:
+            self.queue.put(None)
+            self.thread.join()
+            if self.generated:
+                ui.done(f"[bold]Generating the voice[/]  {self.generated} pieces while writing")
+        if self.errors:
+            ui.warn(f"voice while writing: {ui.escape(self.errors[0])} (it is generated again in the next step)")
+
+    def _missing(self):
+        return render.missing_audio(self.lesson, [s for s in load_script(self.lesson.script)["segments"]
+                                                  if is_written(self.lesson, s)])
 
 
 # ==================================================================== building blocks (also used by commands)
@@ -541,7 +616,7 @@ def redo(a):
         for key in [k for k in meta if k.rsplit("_", 1)[0] in ids]:
             meta.pop(key)
             (lesson.audio / f"{key}.wav").unlink(missing_ok=True)
-        lesson.durations.write_text(json.dumps(meta, ensure_ascii=False, indent=1))
+        lesson.save_durations(meta)
     else:
         for sid in ids:
             (lesson.video / f"{sid}.json").unlink(missing_ok=True)

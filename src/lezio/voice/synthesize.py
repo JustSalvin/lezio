@@ -69,14 +69,14 @@ def synthesize_lesson(lesson_id, segment_ids):
         for key in [k for k in meta if k not in keys]:
             meta.pop(key)
             (lesson.audio / f"{key}.wav").unlink(missing_ok=True)
-        lesson.durations.write_text(json.dumps(meta, ensure_ascii=False, indent=1))
+        lesson.save_durations(meta)
     ready = Engines()
     for i, (key, text, opts) in enumerate(todo, 1):
         engine, params = ready.get(opts)
         audio, sr = engine.synthesize(text, params)
         sf.write(lesson.audio / f"{key}.wav", audio, sr)
         meta[key] = {"text": text, "duration": round(len(audio) / sr, 3), "tts": opts}
-        lesson.durations.write_text(json.dumps(meta, ensure_ascii=False, indent=1))
+        lesson.save_durations(meta)
         emit(event="piece", i=i, key=key, duration=meta[key]["duration"])
     emit(event="done")
 

@@ -361,10 +361,13 @@ def define_template_tool(work):
             return rejected(problems)
         work.lesson.templates.mkdir(parents=True, exist_ok=True)
         (work.lesson.templates / f"{name}.py").write_text(code.rstrip() + "\n")
+        own = sorted(p.stem for p in work.lesson.templates.glob("*.py"))
         return ToolResult([f"Template {name} saved for this lesson. Use it in blocks ({{\"template\": \"{name}\", "
-                           "...}); it runs when a segment using it is submitted, and errors come back then."])
-    return Tool("define_template", "Define (or replace) a template of your own for this lesson, when no library "
-                "template fits: Python code with `@template(...)` and `def <name>(ctx, steps, ...)`.",
+                           "...}); it runs when a segment using it is submitted, and errors come back then.",
+                           f"Templates of this lesson so far: {', '.join(own)}. Reuse them; prefer the library."])
+    return Tool("define_template", "LAST RESORT: define (or replace) a template of your own for this lesson, only "
+                "when no library template - alone or in a sequence of blocks - can show the content. Python code "
+                "with `@template(...)` and `def <name>(ctx, steps, ...)`.",
                 {"type": "object", "properties": {"name": {"type": "string"}, "code": {"type": "string"}},
                  "required": ["name", "code"]}, handler)
 

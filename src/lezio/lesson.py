@@ -91,3 +91,10 @@ class Lesson:
 
     def durations_meta(self):
         return json.loads(self.durations.read_text()) if self.durations.exists() else {}
+
+    def save_durations(self, meta):
+        """Write audio/durations.json atomically (renders may read it while the voice is generated)."""
+        self.durations.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.durations.with_suffix(".tmp")
+        tmp.write_text(json.dumps(meta, ensure_ascii=False, indent=1))
+        tmp.replace(self.durations)
