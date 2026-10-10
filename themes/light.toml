@@ -29,6 +29,6 @@ mono = "Menlo"              # code, binary strings, numbers in columns
 hand = "Chalkboard SE"      # handwriting, for board-like writing and annotations
 
 [sizes]
-title = 48
-text = 34
-small = 26
+title = 54
+text = 40
+small = 30

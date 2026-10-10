@@ -26,6 +26,6 @@ mono = "Menlo"
 hand = "Chalkboard SE"
 
 [sizes]
-title = 50
-text = 36
-small = 28
+title = 56
+text = 42
+small = 32
