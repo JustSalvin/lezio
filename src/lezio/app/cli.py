@@ -57,9 +57,23 @@ COMMANDS = [
              ("-y, --yes", "no confirmation", {"action": "store_true"})],
             ["./lezio redo my-lesson s03 --note \"add an example\"", "./lezio redo my-lesson s03,s05 --part voice"],
             _run_redo),
-    Command("status", "Make a lesson", "your lessons, or what is done in one of them", "[lesson]",
+    Command("list", "Your lessons", "your lessons: title, how much is written, the video", "", [],
+            ["./lezio list"], commands.lessons),
+    Command("status", "Your lessons", "what is done in a lesson: segments, voice, video", "<lesson>",
             [("[lesson]", "a lesson (without it: the list of lessons)", {"nargs": "?"})],
-            ["./lezio status", "./lezio status my-lesson"], commands.status),
+            ["./lezio status my-lesson"], commands.status),
+    Command("open", "Your lessons", "play the video of a lesson", "<lesson>", [("<lesson>", "the lesson", None)],
+            ["./lezio open my-lesson"], commands.open_video),
+    Command("rename", "Your lessons", "rename a lesson (and its video)", "<lesson> <new-name>",
+            [("<lesson>", "the lesson", None), ("<new-name>", "the new name", None)],
+            ["./lezio rename my-lesson binario"], commands.rename),
+    Command("copy", "Your lessons", "duplicate a lesson, e.g. to try other instructions or depth", "<lesson> <new-name>",
+            [("<lesson>", "the lesson", None), ("<new-name>", "the name of the copy", None)],
+            ["./lezio copy binario binario-breve", "./lezio make binario-breve --depth 4 --yes"], commands.copy),
+    Command("delete", "Your lessons", "move a lesson and its video to the Trash (the files in input/ stay)",
+            "<lesson> [--yes]", [("<lesson>", "the lesson", None),
+                                 ("-y, --yes", "no confirmation", {"action": "store_true"})],
+            ["./lezio delete binario-breve"], commands.delete),
     Command("build", "Make a lesson", "voice and video again without the agent (after editing by hand)", "<lesson>", [("<lesson>", "the lesson", None)], ["./lezio build my-lesson"],
             commands.build),
     Command("config", "Look and sound", "change the configuration: voice, theme, subtitles, agent, video",
@@ -96,7 +110,7 @@ COMMANDS = [
     Command("help", "More", "the options of a command", "[command]", [], ["./lezio help make"], None),
 ]
 BY_NAME = {c.name: c for c in COMMANDS}
-GROUPS = ["Make a lesson", "Look and sound", "More"]
+GROUPS = ["Make a lesson", "Your lessons", "Look and sound", "More"]
 
 
 # ------------------------------------------------------------------ help pages
@@ -111,6 +125,7 @@ def overview():
     ui.table(["", ""], rows[1:])
     ui.console.print()
     ui.hint("start:        ./lezio make")
+    ui.hint("your lessons: ./lezio list")
     ui.hint("a command:    ./lezio help make")
     ui.info("Configuration (voice, theme, subtitles, agent model, video) is in config.toml: ./lezio config.")
 
@@ -142,8 +157,11 @@ def parser_for(c):
     elif c.name == "redo":
         p.add_argument("lesson")
         p.add_argument("segments")
-    elif c.name == "build":
+    elif c.name in ("build", "open", "delete"):
         p.add_argument("lesson")
+    elif c.name in ("rename", "copy"):
+        p.add_argument("lesson")
+        p.add_argument("name")
     for flags, _, kw in c.options:
         if kw is None:
             continue
@@ -194,3 +212,8 @@ def main():
     except KeyboardInterrupt:
         ui.console.print("\n[muted]Stopped.[/]")
         sys.exit(130)
+    except SystemExit as e:
+        if isinstance(e.code, str):                   # errors raised as messages deeper in the program
+            message, _, hint = e.code.partition(". Start one with: ")
+            ui.fail(ui.escape(message), ui.escape(hint) if hint else None)
+        raise

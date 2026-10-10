@@ -80,8 +80,12 @@ change the instructions, rewrite from scratch.
 ### Other commands
 
 ```bash
-./lezio status                                            # your lessons
+./lezio list                                              # your lessons
 ./lezio status <lesson>                                   # segments: written, voice, video up to date?
+./lezio open <lesson>                                     # play the video
+./lezio rename <lesson> <new-name>                        # rename a lesson and its video
+./lezio copy <lesson> <new-name>                          # duplicate it (e.g. to try other instructions)
+./lezio delete <lesson>                                   # move it and its video to the Trash (input/ stays)
 ./lezio redo <lesson> s03 --note "add an example"         # the agent rewrites segment s03
 ./lezio redo <lesson> s03,s05 --part voice                # new voice takes   (--part video: re-render)
 ./lezio build <lesson>                                    # after editing the lesson by hand

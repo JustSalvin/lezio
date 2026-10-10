@@ -128,8 +128,9 @@ input/  output/            material in, videos out (both gitignored)
 - Console output goes through `app/ui.py` (escape user text with `ui.escape`): `banner`, `section`,
   `table` for lists, `key_values` for summaries, `step` for work in progress, `done`/`warn`/`fail`, and
   `hint` for what to do next. Detailed output of subprocesses goes to `lessons/<id>/build/logs/`.
-- Commands: one verb each (`make`, `redo`, `status`, `build`, `config`, `voices`, `themes`, `templates`,
-  `tools`, `help`); add one to `cli.COMMANDS`. Configuration changes only through `config` (or the file):
+- Commands: one verb each (`make`, `redo`, `build`, `list`, `status`, `open`, `rename`, `copy`, `delete`,
+  `config`, `voices`, `themes`, `templates`, `tools`, `help`); add one to `cli.COMMANDS`. `delete` moves to
+  the macOS Trash, never deletes files in input/. Configuration changes only through `config` (or the file):
   the other commands show and preview.
 - A segment video is re-rendered when its fingerprint changes (segment entry, audio durations, scene file,
   `lezio.scene` + runner code, material, video settings): `video/render.fingerprint`. Audio is regenerated

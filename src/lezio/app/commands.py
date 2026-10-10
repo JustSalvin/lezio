@@ -1,4 +1,5 @@
-"""The commands other than make and redo (run.py): status, build, config, voices, themes, templates, tools.
+"""The commands other than make and redo (run.py): your lessons (list, status, open, rename, copy, delete),
+build, config, voices, themes, templates, tools.
 All output goes through ui.py, so every command looks the same."""
 import json
 import subprocess
@@ -78,7 +79,7 @@ def lessons_list():
                      f"{written}/{len(segs)}" if segs else "[muted]—[/]", str(script["settings"]["depth"]), video])
     ui.table(["lesson", "title", ">written", ">depth", "video"], rows)
     ui.info("videos in output/<lesson>.mp4")
-    ui.hint("details: ./lezio status <lesson>     continue: ./lezio make <lesson>")
+    ui.hint("details: ./lezio status <lesson>   continue: ./lezio make <lesson>   play: ./lezio open <lesson>")
 
 
 def build(a):
@@ -384,3 +385,83 @@ def templates(a):
                 subprocess.run(["open", str(sheet)])
     if any(p for _, _, p in results.values()):
         raise SystemExit(1)
+
+
+# ------------------------------------------------------------------ your lessons
+def lessons(a):
+    lessons_list()
+
+
+def _lesson_files(lesson):
+    """The files of a lesson outside its folder: the video and the subtitles in output/."""
+    return [p for p in (lesson.output, lesson.output.with_suffix(".srt")) if p.exists()]
+
+
+def _size(path):
+    if path.is_file():
+        return path.stat().st_size
+    return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+
+
+def _new_id(name):
+    from ..lesson import lesson_exists
+    new = slugify(name)
+    if lesson_exists(new):
+        ui.fail(f"a lesson called '{new}' already exists", "./lezio list")
+    return new
+
+
+def open_video(a):
+    lesson = Lesson(a.lesson)
+    if not lesson.output.exists():
+        ui.fail(f"{lesson.id} has no video yet", f"./lezio make {lesson.id}")
+    subprocess.run(["open", str(lesson.output)])
+    ui.done(f"opened {rel(lesson.output)}")
+
+
+def rename(a):
+    import shutil
+    lesson = Lesson(a.lesson)
+    new = _new_id(a.name)
+    files = _lesson_files(lesson)
+    shutil.move(str(lesson.dir), str(lesson.dir.parent / new))
+    for f in files:
+        f.rename(f.with_name(new + f.suffix))
+    ui.done(f"{lesson.id} → [accent]{new}[/]" + (f"  [muted](and its {len(files)} files in output/)[/]" if files else ""))
+
+
+def copy(a):
+    import shutil
+    lesson = Lesson(a.lesson)
+    new = _new_id(a.name)
+    dst = lesson.dir.parent / new
+    with ui.step(f"Copying {lesson.id}") as st:
+        shutil.copytree(lesson.dir, dst, ignore=shutil.ignore_patterns("media", "drafts", "log.jsonl", "backup_*"))
+        st.done(f"→ [accent]{new}[/]  [muted]material, voice and renders are reused[/]")
+    ui.hint(f"change it, e.g.: ./lezio make {new} --instructions \"...\"   (the video goes to output/{new}.mp4)")
+
+
+def delete(a):
+    import shutil
+    from . import wizard
+    lesson = Lesson(a.lesson)
+    files = _lesson_files(lesson)
+    size = _size(lesson.dir) + sum(f.stat().st_size for f in files)
+    ui.key_values([("lesson", f"[bold]{lesson.id}[/]  {rel(lesson.dir)}"),
+                   ("files", "\n".join(rel(f) for f in files) or "[muted]no video[/]"),
+                   ("size", f"{size / 1e6:.0f} MB"),
+                   ("kept", "the study material in input/")], title="delete")
+    if not a.yes:
+        if not wizard.interactive():
+            ui.fail("deleting a lesson needs a confirmation", f"./lezio delete {lesson.id} --yes")
+        if not wizard.confirm(f"Move {lesson.id} to the Trash?", default=False):
+            ui.info("Nothing deleted.")
+            return
+    trash = __import__("pathlib").Path.home() / ".Trash"
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    target = trash / f"lezio-{lesson.id}-{stamp}"
+    target.mkdir(parents=True)
+    shutil.move(str(lesson.dir), str(target / lesson.id))
+    for f in files:
+        shutil.move(str(f), str(target / f.name))
+    ui.done(f"{lesson.id} moved to the Trash  [muted]({target.name})[/]")

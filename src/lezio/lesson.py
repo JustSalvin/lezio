@@ -45,7 +45,7 @@ class Lesson:
         self.id = lesson_id
         self.dir = LESSONS / lesson_id
         if not lesson_exists(lesson_id):
-            raise SystemExit(f"Unknown lesson '{lesson_id}'. Start one with: ./lezio make input/<file>   (lessons: ./lezio status)")
+            raise SystemExit(f"Unknown lesson '{lesson_id}'. Start one with: ./lezio make input/<file>   (your lessons: ./lezio list)")
         self.info = json.loads((self.dir / "lesson.json").read_text())
         self.script = self.dir / "script.json"
         self.scenes = self.dir / "scenes"
