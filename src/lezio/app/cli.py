@@ -62,15 +62,13 @@ COMMANDS = [
     Command("status", "Your lessons", "what is done in a lesson: segments, voice, video", "<lesson>",
             [("[lesson]", "a lesson (without it: the list of lessons)", {"nargs": "?"})],
             ["./lezio status my-lesson"], commands.status),
-    Command("open", "Your lessons", "play the video of a lesson", "<lesson>", [("<lesson>", "the lesson", None)],
-            ["./lezio open my-lesson"], commands.open_video),
-    Command("rename", "Your lessons", "rename a lesson (and its video)", "<lesson> <new-name>",
+    Command("rename", "Your lessons", "rename a lesson (videos already in output/ are not touched)", "<lesson> <new-name>",
             [("<lesson>", "the lesson", None), ("<new-name>", "the new name", None)],
             ["./lezio rename my-lesson binario"], commands.rename),
     Command("copy", "Your lessons", "duplicate a lesson, e.g. to try other instructions or depth", "<lesson> <new-name>",
             [("<lesson>", "the lesson", None), ("<new-name>", "the name of the copy", None)],
             ["./lezio copy binario binario-breve", "./lezio make binario-breve --depth 4 --yes"], commands.copy),
-    Command("delete", "Your lessons", "move a lesson and its video to the Trash (the files in input/ stay)",
+    Command("delete", "Your lessons", "move a lesson to the Trash (output/ and input/ are not touched)",
             "<lesson> [--yes]", [("<lesson>", "the lesson", None),
                                  ("-y, --yes", "no confirmation", {"action": "store_true"})],
             ["./lezio delete binario-breve"], commands.delete),
@@ -157,7 +155,7 @@ def parser_for(c):
     elif c.name == "redo":
         p.add_argument("lesson")
         p.add_argument("segments")
-    elif c.name in ("build", "open", "delete"):
+    elif c.name in ("build", "delete"):
         p.add_argument("lesson")
     elif c.name in ("rename", "copy"):
         p.add_argument("lesson")

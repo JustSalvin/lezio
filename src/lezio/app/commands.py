@@ -1,4 +1,4 @@
-"""The commands other than make and redo (run.py): your lessons (list, status, open, rename, copy, delete),
+"""The commands other than make and redo (run.py): your lessons (list, status, rename, copy, delete),
 build, config, voices, themes, templates, tools.
 All output goes through ui.py, so every command looks the same."""
 import json
@@ -79,7 +79,7 @@ def lessons_list():
                      f"{written}/{len(segs)}" if segs else "[muted]—[/]", str(script["settings"]["depth"]), video])
     ui.table(["lesson", "title", ">written", ">depth", "video"], rows)
     ui.info("videos in output/<lesson>.mp4")
-    ui.hint("details: ./lezio status <lesson>   continue: ./lezio make <lesson>   play: ./lezio open <lesson>")
+    ui.hint("details: ./lezio status <lesson>     continue: ./lezio make <lesson>")
 
 
 def build(a):
@@ -392,11 +392,6 @@ def lessons(a):
     lessons_list()
 
 
-def _lesson_files(lesson):
-    """The files of a lesson outside its folder: the video and the subtitles in output/."""
-    return [p for p in (lesson.output, lesson.output.with_suffix(".srt")) if p.exists()]
-
-
 def _size(path):
     if path.is_file():
         return path.stat().st_size
@@ -411,23 +406,15 @@ def _new_id(name):
     return new
 
 
-def open_video(a):
-    lesson = Lesson(a.lesson)
-    if not lesson.output.exists():
-        ui.fail(f"{lesson.id} has no video yet", f"./lezio make {lesson.id}")
-    subprocess.run(["open", str(lesson.output)])
-    ui.done(f"opened {rel(lesson.output)}")
-
-
 def rename(a):
+    """Renames the lesson only: the videos already in output/ are not touched."""
     import shutil
     lesson = Lesson(a.lesson)
     new = _new_id(a.name)
-    files = _lesson_files(lesson)
     shutil.move(str(lesson.dir), str(lesson.dir.parent / new))
-    for f in files:
-        f.rename(f.with_name(new + f.suffix))
-    ui.done(f"{lesson.id} → [accent]{new}[/]" + (f"  [muted](and its {len(files)} files in output/)[/]" if files else ""))
+    ui.done(f"{lesson.id} → [accent]{new}[/]")
+    if lesson.output.exists():
+        ui.info(f"{rel(lesson.output)} keeps its name; the next video of the lesson goes to output/{new}.mp4")
 
 
 def copy(a):
@@ -442,15 +429,13 @@ def copy(a):
 
 
 def delete(a):
+    """Moves the lesson folder to the Trash; the videos in output/ and the material in input/ stay."""
     import shutil
     from . import wizard
     lesson = Lesson(a.lesson)
-    files = _lesson_files(lesson)
-    size = _size(lesson.dir) + sum(f.stat().st_size for f in files)
     ui.key_values([("lesson", f"[bold]{lesson.id}[/]  {rel(lesson.dir)}"),
-                   ("files", "\n".join(rel(f) for f in files) or "[muted]no video[/]"),
-                   ("size", f"{size / 1e6:.0f} MB"),
-                   ("kept", "the study material in input/")], title="delete")
+                   ("size", f"{_size(lesson.dir) / 1e6:.0f} MB"),
+                   ("kept", "its videos in output/ and the study material in input/")], title="delete")
     if not a.yes:
         if not wizard.interactive():
             ui.fail("deleting a lesson needs a confirmation", f"./lezio delete {lesson.id} --yes")
@@ -458,10 +443,6 @@ def delete(a):
             ui.info("Nothing deleted.")
             return
     trash = __import__("pathlib").Path.home() / ".Trash"
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    target = trash / f"lezio-{lesson.id}-{stamp}"
-    target.mkdir(parents=True)
-    shutil.move(str(lesson.dir), str(target / lesson.id))
-    for f in files:
-        shutil.move(str(f), str(target / f.name))
+    target = trash / f"lezio-{lesson.id}-{time.strftime('%Y%m%d-%H%M%S')}"
+    shutil.move(str(lesson.dir), str(target))
     ui.done(f"{lesson.id} moved to the Trash  [muted]({target.name})[/]")
