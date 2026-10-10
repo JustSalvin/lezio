@@ -107,14 +107,16 @@ def config(a):
 
 
 def config_show():
-    from ..agent.backends import task_options
-    v, n, ag = CONFIG["video"], CONFIG["narration"], CONFIG["agent"]
+    from ..agent.backends import backend_name, backend_settings, task_options
+    v, n, b = CONFIG["video"], CONFIG["narration"], backend_settings()
     overrides = ", ".join(f"{t} {o['model']}/{o['effort']}" for t in ("plan", "write", "review")
-                          for o in [task_options(t)] if t in ag)
+                          for o in [task_options(t)] if t in b)
     ui.key_values([
         ("voice", ui.escape(tts_label())),
         ("narration", f"{n['language']} · {n['piece_gap']} s between pieces"),
-        ("agent", f"{ag['backend']} · {ag['model']} · effort {ag['effort']}"
+        ("agent", f"{backend_name()} · {b.get('model') or 'default'}"
+                  + (f" · effort {b['effort']}" if b.get("effort") else "")
+                  + (f" · {b['url']}" if b.get("url") else "")
                   + (f"  [muted]({ui.escape(overrides)})[/]" if overrides else "")),
         ("video", f"theme {house_theme()} · subtitles {v.get('subtitles', 'track')} · {v['width']}x{v['height']} · "
                   f"{v['fps']} fps"),

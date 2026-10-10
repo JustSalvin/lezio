@@ -28,8 +28,16 @@ segment — checked and previewed on the spot —, ...): it has no files, shell 
 - macOS on **Apple Silicon** (M1 or newer), ~6 GB of free disk space
 - [Homebrew](https://brew.sh)
 - Python 3.11+ (installed automatically if you use [mise](https://mise.jdx.dev))
-- **[Claude Code](https://claude.com/claude-code)**, logged in once with `claude` using your Claude
-  subscription: the program talks to Claude through the Claude Agent SDK with that login (no API key).
+- An LLM for the agent tasks, one of (`[agent] backend` in `config.toml`):
+  - `claude-subscription` (default): **[Claude Code](https://claude.com/claude-code)** logged in once with
+    `claude` using your Claude subscription (no API key);
+  - `anthropic-api`: an Anthropic API key in `ANTHROPIC_API_KEY` (paid per token);
+  - `openai-api`: an OpenAI API key in `OPENAI_API_KEY` (paid per token);
+  - `local`: a model on your computer behind an OpenAI-compatible server — [Ollama](https://ollama.com)
+    (default), LM Studio, llama.cpp... The model needs tool calling and, ideally, vision, and the server a
+    context of **32768 tokens or more** (Ollama: the app's settings, or `OLLAMA_CONTEXT_LENGTH=32768 ollama
+    serve`; lezio stops with a message if Ollama runs it with less). Free and private, but small models write
+    weaker lessons than Claude or GPT and take longer.
 
 ## Installation
 
@@ -146,7 +154,7 @@ lives: change it by hand or with `./lezio config` (`voices`, `themes` and `templ
 |---|---|
 | `[tts]`, `[tts.<engine>]` | speech engine (`voxtral` local, `edge` online) and its options: voice, expressiveness, model |
 | `[narration]` | language of narration and on-screen texts, pause between pieces |
-| `[agent]` | LLM backend, **model** (`sonnet` by default, `opus`, `haiku` or a full id) and **effort**; optional `[agent.plan]`, `[agent.write]`, `[agent.review]` overrides |
+| `[agent]`, `[agent.<backend>]` | the LLM **backend**; each backend keeps its own **model**, **effort** (and for `local` the server address and whether the model sees images), with optional per-task overrides `[agent.<backend>.plan\|write\|review]` |
 | `[video]` | house **theme** (a file in `themes/`), **subtitles**, resolution and frame rate |
 | `[tuning]` | segments per agent task, previews per segment, render timeout, parallel renders, image sizes |
 
@@ -188,7 +196,7 @@ src/lezio/                 the program (see AGENTS.md)
 ## Roadmap
 
 - PowerPoint (`.pptx`) material: text and pictures with python-pptx, page images through LibreOffice.
-- `anthropic-api` backend and other LLMs behind the same interface (`src/lezio/agent/backends/`).
+- More LLM backends behind the same interface (`src/lezio/agent/backends/`).
 - More TTS engines (`src/lezio/voice/engines/`).
 
 ## License

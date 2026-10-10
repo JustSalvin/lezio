@@ -22,12 +22,19 @@ need judgment — planning the lesson, writing the narration and scenes of a few
 final frames. In every task the model works only through tools the program defines (read the material,
 look at pages, submit a segment — checked and previewed on the spot —, ...): it has no files, shell or web.
 
-- Repository: `github.com/JustSalvin/lezio` (public). The local folder kept its old name, `slide-reader/`. Command: `./lezio` (bash wrapper → `.venv/bin/python -m lezio`, package in `src/lezio/`).
+- Repository: `github.com/JustSalvin/lezio` (public). The local folder kept its old name, `slide-reader/`.
+  Command: `./lezio` (bash wrapper → `.venv/bin/python -m lezio`, package in `src/lezio/`).
 - Machine: macOS on Apple Silicon (M5, 24 GB). Python 3.14 via mise. Homebrew cairo/pkgconf. Two venvs:
-  `.venv` (program, Manim 0.22, PyMuPDF, python-docx, Claude Agent SDK, rich, questionary, tomlkit) and
+  `.venv` (program, Manim 0.22, PyMuPDF, python-docx, Claude Agent SDK, anthropic + openai SDKs [in
+  requirements-video.txt, not yet installed in the user's .venv], rich, questionary, tomlkit) and
   `.venv-tts` (MLX, mlx-audio with Voxtral, edge-tts). `setup.sh` installs everything.
-- LLM: Claude through the Claude Agent SDK with the user's Claude Code login (subscription, no API key).
-  Default model Sonnet, effort high; per-task overrides possible.
+- LLM: four backends, chosen in config.toml (`[agent] backend`), each with its own settings in
+  `[agent.<backend>]`: `claude-subscription` (default: Claude Agent SDK with the user's Claude Code login,
+  no API key; Sonnet, effort high), `anthropic-api` (ANTHROPIC_API_KEY), `openai-api` (OPENAI_API_KEY,
+  Responses API) and `local` (an OpenAI-compatible server, Ollama by default, e.g. gemma4:12b). Per-task
+  overrides possible. The user has no API keys and no local server installed (October 2026): the API
+  and local backends are tested only against fake servers (in a Docker container: nothing installed on
+  the Mac for them).
 
 ## 2. How a lesson is made
 
@@ -177,6 +184,8 @@ docs/             HANDOFF.md, history.md, teaching-guidelines.md
 - **Never open other apps automatically** (no Preview/QuickTime/players): previews and samples are saved
   and their paths printed; audio is played only with an explicit `--play`.
 - Consistent terminal UI: all output through `app/ui.py`; every command described once in `cli.COMMANDS`.
+- **Do not download or install anything on the Mac without asking** (packages, models, servers); if a
+  test really needs software, a Docker container (OrbStack) is acceptable.
 - Ask before outward-facing actions; the user tests lessons in parallel: check for running `lezio`/`manim`
   processes and do not touch their lessons; prompt files are read at every task, so editing them affects
   a running lesson.
@@ -208,7 +217,7 @@ docs/             HANDOFF.md, history.md, teaching-guidelines.md
 - Templates the agent writes for itself are less polished than library ones (denser, smaller text).
 - Open ideas: parallel write sessions; Opus for the plan and Sonnet for writing/review (per-task overrides
   exist); speech speed as a post-processing option; PowerPoint input (needs LibreOffice for page images);
-  `anthropic-api` backend (stub); more TTS engines.
+  more TTS engines; a real test of the API and local backends (they need keys or a local server).
 
 ## 9. Checking that it works
 
@@ -217,5 +226,6 @@ docs/             HANDOFF.md, history.md, teaching-guidelines.md
 ./lezio templates --demo all          # every template renders its example (no LLM)
 ./lezio tools check <lesson>          # blocks, narration, templates, refs
 ./lezio build <lesson>                # voice, render, join without the agent
+.venv/bin/python tests/test_backends.py   # LLM backends against fake servers (see the file for Docker)
 ./lezio make input/x.pdf --focus "x.pdf:1-6" --depth 3 --yes   # end to end on small material (uses the subscription)
 ```

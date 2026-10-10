@@ -12,13 +12,18 @@ import tomlkit
 from questionary import Choice, Separator
 
 from ..agent.backends import BACKENDS
+from ..agent.backends.openai_compatible import LOCAL_URL
 from ..config import CONFIG_FILE, ROOT
 from ..voice import engines
 from . import ui
 from .wizard import STYLE, ask
 
 EFFORTS = ["low", "medium", "high", "xhigh", "max"]
-MODELS = [("sonnet", "fast and capable (default)"), ("opus", "the most capable, slower"), ("haiku", "the fastest")]
+CLAUDE = [("sonnet", "fast and capable"), ("opus", "the most capable, slower"), ("haiku", "the fastest")]
+MODELS = {"claude-subscription": CLAUDE,
+          "anthropic-api": CLAUDE + [("fable", "Anthropic's most capable, the most expensive")],
+          "openai-api": [("gpt-6.1-sol", "balanced"), ("gpt-6-astra", "the most capable"),
+                         ("gpt-6-luna", "the fastest")]}    # local: the model's name on the server
 TASKS = {"plan": "planning the lesson", "write": "writing narration and scenes", "review": "final review"}
 RESOLUTIONS = [(1920, 1080), (1280, 720), (2560, 1440), (3840, 2160)]
 FPS = [24, 25, 30, 60]
@@ -141,52 +146,70 @@ def narration_menu(doc):
                                     minimum=0, maximum=3)
 
 
-def model_choice(message, current, allow_default=False):
+def model_choice(backend, message, current, allow_default=False):
+    known = MODELS.get(backend, [])
     choices = ([Choice("same as the default", BACK)] if allow_default else [])
-    choices += [Choice(f"{m:8} {d}", m) for m, d in MODELS] + [Choice("other (full model id)…", "other")]
-    known = [m for m, _ in MODELS]
-    v = select(message, choices, default=current if current in known else None)
-    return text("Model id (e.g. claude-opus-5-5)", current or "") if v == "other" else v
+    choices += [Choice(f"{m:12} {d}", m) for m, d in known] + [Choice("other (model id)…" if known else "a model…",
+                                                                       "other")]
+    v = select(message, choices, default=current if current in [m for m, _ in known] else None)
+    if v != "other":
+        return v
+    return text("Model id" + (" as the server names it (e.g. gemma4:12b)" if backend == "local" else ""), current or "")
+
+
+def effort_choice(backend, message, current, allow_default=False):
+    choices = ([Choice("same as the default", BACK)] if allow_default else []) + EFFORTS
+    choices += [Choice("not sent (models that do not reason)", "")] if backend == "local" else []
+    return select(message, choices, default=current if current in EFFORTS else None)
 
 
 def agent_menu(doc):
     agent = table(doc, "agent")
     while True:
-        overrides = ", ".join(f"{t}: {agent[t].get('model', '=')}/{agent[t].get('effort', '=')}"
-                              for t in TASKS if t in agent) or "none"
-        key = select("Agent (LLM)", [
-            Choice(f"backend      {agent.get('backend')}", "backend"),
-            Choice(f"model        {agent.get('model')}", "model"),
-            Choice(f"effort       {agent.get('effort')}", "effort"),
-            Choice(f"per task     {overrides}", "tasks", description="a different model or effort for plan, write "
-                                                                     "or review"),
-            Choice("Back", BACK)])
+        name = agent.get("backend")
+        b = table(doc, "agent", name)
+        overrides = ", ".join(f"{t}: {b[t].get('model', '=')}/{b[t].get('effort', '=')}"
+                              for t in TASKS if t in b) or "none"
+        choices = [Choice(f"backend      {name}", "backend", description=getattr(BACKENDS.get(name), "summary", None)),
+                   Choice(f"model        {b.get('model') or 'default'}", "model"),
+                   Choice(f"effort       {b.get('effort') or 'not sent'}", "effort"),
+                   Choice(f"per task     {overrides}", "tasks", description="a different model or effort for plan, "
+                                                                            "write or review")]
+        if name == "local":
+            choices += [Choice(f"server       {b.get('url') or LOCAL_URL}", "url",
+                               description="an OpenAI-compatible server: Ollama, LM Studio, llama.cpp..."),
+                        Choice(f"vision       {'yes' if b.get('vision', True) else 'no'}", "vision",
+                               description="whether the model can look at pages and frames")]
+        key = select("Agent (LLM) · each backend keeps its own settings", choices + [Choice("Back", BACK)])
         if key == BACK:
             return
         if key == "backend":
-            agent["backend"] = select("Backend", [Choice(b + ("  (planned, not implemented yet)"
-                                                              if b == "anthropic-api" else ""), b) for b in BACKENDS],
-                                      default=agent.get("backend"))
+            agent["backend"] = select("Backend", [Choice(f"{n:20} {cls.summary}", n) for n, cls in BACKENDS.items()],
+                                      default=name if name in BACKENDS else None)
         elif key == "model":
-            agent["model"] = model_choice("Model", agent.get("model"))
+            b["model"] = model_choice(name, "Model", b.get("model"))
         elif key == "effort":
-            agent["effort"] = select("Reasoning effort", EFFORTS, default=agent.get("effort"))
+            b["effort"] = effort_choice(name, "Reasoning effort", b.get("effort"))
+        elif key == "url":
+            b["url"] = text("Server address (ending in /v1)", b.get("url") or LOCAL_URL)
+        elif key == "vision":
+            b["vision"] = select("Can the model see images?", [Choice("yes", True), Choice("no", False)],
+                                 default=b.get("vision", True))
         else:
             task = select("Which task?", [Choice(f"{t:7} {d}", t) for t, d in TASKS.items()] + [Choice("Back", BACK)])
             if task == BACK:
                 continue
-            current = agent.get(task, {})
-            m = model_choice(f"Model for {task}", current.get("model"), allow_default=True)
-            e = select(f"Effort for {task}", [Choice("same as the default", BACK)] + EFFORTS,
-                       default=current.get("effort"))
+            current = b.get(task, {})
+            m = model_choice(name, f"Model for {task}", current.get("model"), allow_default=True)
+            e = effort_choice(name, f"Effort for {task}", current.get("effort"), allow_default=True)
             values = {k: v for k, v in (("model", m), ("effort", e)) if v != BACK}
             if values:
                 t = tomlkit.table()
                 t.update(values)
                 t.add(tomlkit.nl())
-                agent[task] = t
-            elif task in agent:
-                del agent[task]
+                b[task] = t
+            elif task in b:
+                del b[task]
 
 
 def video_menu(doc):
@@ -249,13 +272,15 @@ def configure():
         d = doc.unwrap()
         tts = d.get("tts", {})
         eng = tts.get(tts.get("engine"), {})
-        agent, video = d.get("agent", {}), d.get("video", {})
+        video = d.get("video", {})
+        backend = d.get("agent", {}).get("backend")
+        b = d.get("agent", {}).get(backend, {})
         changed = flat(d) != before
         key = select("config.toml · what do you want to change?" + ("  (unsaved changes)" if changed else ""), [
             Choice(f"Voice         {tts.get('engine')} · {eng.get('voice', '')}", "voice"),
             Choice(f"Narration     {d.get('narration', {}).get('language')}", "narration"),
-            Choice(f"Agent         {agent.get('backend')} · {agent.get('model')} · effort {agent.get('effort')}",
-                   "agent"),
+            Choice(f"Agent         {backend} · {b.get('model') or 'default'}"
+                   + (f" · effort {b['effort']}" if b.get("effort") else ""), "agent"),
             Choice(f"Video         theme {video.get('theme', 'light')} · subtitles {video.get('subtitles', 'track')} · "
                    f"{video.get('width')}x{video.get('height')} · {video.get('fps')} fps", "video"),
             Choice("Tuning", "tuning"),

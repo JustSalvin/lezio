@@ -29,19 +29,45 @@ piece_gap = 0.35
 [agent]
 # The LLM used for the tasks that need judgment (planning the lesson, writing narration and scenes,
 # judging the final frames). The model works only through tools defined by the program.
-#   "claude-subscription" = Claude via the Claude Agent SDK, using your Claude Code login (subscription)
-#   "anthropic-api"       = Anthropic API key (planned, not implemented yet)
+#   "claude-subscription" = Claude with your Claude Code login (subscription, no API key)
+#   "anthropic-api"       = Claude with an Anthropic API key (ANTHROPIC_API_KEY), paid per token
+#   "openai-api"          = OpenAI models with an OpenAI API key (OPENAI_API_KEY), paid per token
+#   "local"               = a model on this computer (Ollama, LM Studio, llama.cpp...): free, but small
+#                           models write weaker lessons and are slower
+# Each backend keeps its settings in its own table below: switching is this one line.
 backend = "claude-subscription"
-# Model: an alias (opus, sonnet, haiku) or a full id (e.g. claude-opus-5-5, claude-sonnet-5-5)
+# In every table: model, and reasoning effort (low | medium | high | xhigh | max).
+# Per-task overrides (plan = outline and segments, write = narration and scenes, review = final check of
+# the rendered video) go in a table under the backend, e.g.
+#   [agent.claude-subscription.plan]
+#   model = "opus"
+
+[agent.claude-subscription]
+# An alias (opus, sonnet, haiku) or a full id (e.g. claude-opus-5-5, claude-sonnet-5-5)
 model = "sonnet"
-# Reasoning effort: low | medium | high | xhigh | max
 effort = "high"
 
-# Optional per-task overrides (plan = outline and segments, write = narration and scenes,
-# review = final check of the rendered video).
-# [agent.review]
-# model = "sonnet"
-# effort = "medium"
+[agent.anthropic-api]
+# An alias (opus, sonnet, haiku, fable) or a full id (e.g. claude-opus-5-5, claude-sonnet-5-5)
+model = "sonnet"
+effort = "high"
+
+[agent.openai-api]
+# gpt-6.1-sol (balanced), gpt-6-astra (the most capable), gpt-6-luna (the fastest), or another model id
+model = "gpt-6.1-sol"
+effort = "high"
+
+[agent.local]
+# Address of an OpenAI-compatible server: Ollama http://localhost:11434/v1 · LM Studio http://localhost:1234/v1
+url = "http://localhost:11434/v1"
+# A model with tool calling and, if possible, vision (it looks at pages and frames), named as on the server.
+# Ollama: `ollama pull gemma4:12b` (gemma4:26b is better if memory allows). The server must run it with a
+# context of 32768 tokens or more (Ollama: the app's settings, or OLLAMA_CONTEXT_LENGTH=32768 ollama serve).
+model = "gemma4:12b"
+# Sent only if set, for models that reason ("" = not sent)
+effort = ""
+# false if the model cannot see images: it then gets a note instead of the pictures
+vision = true
 
 [video]
 # House visual style: a theme file in themes/ (light, dark, chalkboard, whiteboard, paper, or your own).

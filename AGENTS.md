@@ -14,7 +14,8 @@ through tools the program defines.
 ./lezio ─ app/cli.py ─ app/run.py (Run) ─┬─ material/             ingest sources → build/material/index.json, refs
                                          ├─ agent/tasks.py        plan · write segments · review (tools)
                                          │    agent/prompts/      role, tasks, rules (teaching...), depth.toml
-                                         │    agent/backends/     LLM backends (Claude subscription; API planned)
+                                         │    agent/backends/     LLM backends (Claude subscription, Anthropic
+                                         │                        API, OpenAI API, local OpenAI-compatible server)
                                          ├─ validate.py           narration rules, scene code checks, script
                                          ├─ voice/client.py ─ voice/synthesize.py (in .venv-tts) ─ voice/engines/
                                          └─ video/render.py ─ manim ─ video/scene_runner.py ─ template blocks
@@ -55,7 +56,9 @@ src/lezio/
     prompts/               role.md, plan.md, write.md, review.md, rules/*.md (teaching, writing, narration
                            format, scene API), depth.toml (rules and target lengths)
     prompts.py             loads and composes prompt texts ($placeholders)
-    backends/              base.py (Task, Tool, ToolResult, Image), claude_subscription.py, anthropic_api.py
+    backends/              base.py (Task, Tool, ToolResult, Image, Session: log/events/tool calls shared by
+                           all backends), claude_subscription.py (Agent SDK), anthropic_api.py (Messages API),
+                           openai_compatible.py (OpenAI Responses API; local servers via Chat Completions)
   voice/
     engines/               TTS engines (base.Engine with declared options): voxtral, edge
     synthesize.py          worker run in .venv-tts; prints JSON progress events
@@ -120,8 +123,8 @@ input/  output/            material in, videos out (both gitignored)
   wizard/CLI and are saved in `lessons/<id>/script.json` (`settings.LESSON_CHOICES`); the sources are in
   `lesson.json`; configuration (TTS, language, LLM, video, `[tuning]`) lives only in `config.toml` and has
   no CLI flags (`./lezio config` edits the file).
-- Two virtual environments: `.venv` (program, Manim, PyMuPDF, python-docx, Claude Agent SDK, rich,
-  questionary, tomlkit) and `.venv-tts` (MLX, TTS engines). `config.py`, `lesson.py`, `settings.py`,
+- Two virtual environments: `.venv` (program, Manim, PyMuPDF, python-docx, Claude Agent SDK, anthropic,
+  openai, rich, questionary, tomlkit) and `.venv-tts` (MLX, TTS engines). `config.py`, `lesson.py`, `settings.py`,
   `script.py` and `voice/engines/*` are imported by both: keep their module level free of heavy imports.
 - The LLM has no files, shell or web. Anything it needs is in the task message or behind a tool; anything
   it produces goes through a tool that validates it. Prompt texts belong in `agent/prompts/`, not in code.
@@ -184,10 +187,15 @@ written for the model, and listed in `agent.tasks.scene_api()`.
 (float32 array, sample_rate)` and optionally `download`. Register in `voice/engines/__init__.py`, add
 `[tts.<name>]` to `config.toml` and its package to `requirements-tts.txt`.
 
-**LLM backend** — `agent/backends/<name>.py`: subclass `Backend`; `run(task)` sends `task.system` +
-`task.prompt` with `task.model`/`task.effort`, exposes `task.tools`, runs their handlers for every tool
-call (results: text and `Image`), stops when a result has `done=True`, reports through
-`task.on_event`. Register in `agent/backends/__init__.py`.
+**LLM backend** — `agent/backends/<name>.py`: subclass `Backend` (its `[agent.<name>]` table of
+`config.toml` is `self.settings`); `check()` fails early with a helpful message (missing package, key or
+server); `run(task)` sends `task.system` + `task.prompt` with `task.model`/`task.effort`, exposes
+`task.tools` and loops: every tool call goes through `Session.call` (logs, events, argument checks, the
+handler; results are text and `Image`), the loop stops when `session.outcome.done` (a result with
+`done=True`), when the model answers without tools or after `task.max_turns`; API errors go to
+`outcome.error`. Register in `agent/backends/__init__.py`, add `[agent.<name>]` to `config.toml`, its
+package to `requirements-video.txt` (imported inside `check`/`run`, so the others work without it) and its
+models to `MODELS` in `app/configure.py`.
 
 **Task behaviour** — texts in `agent/prompts/`, tools in `agent/tasks.py`, validation in `validate.py`,
 order of tasks and retries in `app/run.py`.
@@ -202,10 +210,14 @@ order of tasks and retries in `app/run.py`.
 ./lezio tools scene-api                                  # the API the model sees for its own templates
 ./lezio voices --try "Prova" --engine edge               # TTS engines
 ./lezio build <lesson>                                   # voice/render/join without LLM calls
+.venv/bin/python tests/test_backends.py                  # LLM backends against fake servers (no model)
 ```
 
-LLM tasks use the user's Claude subscription: test them on small material first (e.g. a few PDF pages
-with `--focus`) and read `lessons/<id>/build/agent/log.jsonl` (prompts, tool calls, tool results).
+LLM tasks use the configured backend (by default the user's Claude subscription; the API backends cost
+money): test them on small material first (e.g. a few PDF pages with `--focus`) and read
+`lessons/<id>/build/agent/log.jsonl` (prompts, tool calls, tool results, token usage). The backends' tool
+loops can be tested without any model against fake servers that speak each API (Anthropic SSE stream,
+OpenAI Responses, Chat Completions + Ollama's `/api/ps`).
 
 ## Known pitfalls
 
@@ -216,4 +228,13 @@ with `--focus`) and read `lessons/<id>/build/agent/log.jsonl` (prompts, tool cal
 - Rich markup: escape user/config text containing `[...]` (`ui.escape`).
 - Claude Agent SDK: isolation via `tools=[]`, `setting_sources=[]`, `strict_mcp_config=True`; images in
   tool results are compressed (`Image.from_file`) and `max_buffer_size` is raised.
+- Anthropic API: streaming (`client.beta.messages.stream`), adaptive thinking + `output_config.effort`,
+  `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`) on Opus 5/5.5, Sonnet 5.5 and Fable 5.1;
+  the assistant turn is sent back unchanged (thinking blocks included; after a mid-answer fallback only
+  the text before the `fallback` block).
+- OpenAI Responses API with `store: false`: reasoning items come back with `encrypted_content` and are
+  passed back as they are; `function_call_output` can hold text and images.
+- Local servers (Chat Completions): tool messages are text only, so pictures go in a user message after
+  them; Ollama's default context (4096 on machines under 24 GB) silently cuts lezio's 15-25k-token prompts:
+  the backend compares `GET /api/ps` `context_length` with what it sends.
 - The package lives in `src/lezio/` because the wrapper `./lezio` and a `lezio/` folder cannot share a name.
