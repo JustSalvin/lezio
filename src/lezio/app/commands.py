@@ -193,8 +193,8 @@ def preview_theme(name):
         if r.returncode != 0:
             ui.fail("preview failed", ui.escape((r.stdout + r.stderr)[-400:]))
         png = next(media.glob(f"images/**/theme_{name}*.png"))
-        out = ROOT / "output" / f"theme_{name}.png"
-        out.parent.mkdir(exist_ok=True)
+        out = demo_lesson().qa / f"theme_{name}.png"     # with the template examples, not in output/
+        out.parent.mkdir(parents=True, exist_ok=True)
         png.replace(out)
         st.done(rel(out))
     return out

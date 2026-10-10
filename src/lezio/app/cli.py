@@ -88,7 +88,7 @@ COMMANDS = [
               {"action": "store_true"})],
             ["./lezio voices", "./lezio voices --try \"Ciao a tutti.\" --voice it_male --play"], commands.voices),
     Command("themes", "Look and sound", "the visual themes (colors, fonts, sizes); preview one", "[--preview NAME]",
-            [("--preview NAME", "render a picture of a theme (output/theme_NAME.png)", {})],
+            [("--preview NAME", "render a picture of a theme (in lessons/_templates/build/qa/)", {})],
             ["./lezio themes", "./lezio themes --preview chalkboard"], commands.themes),
     Command("templates", "Look and sound", "the scene templates lessons are built with; see examples",
             "[--demo NAME|all]",
