@@ -1,8 +1,8 @@
 # AGENTS.md — developer guide
 
 Guide for coding agents (and people) **developing** lezio. The program never reads this file at runtime:
-LLM tasks get their instructions from `src/lezio/agent/prompts/`. How lezio came out of slide-reader:
-`docs/history.md`.
+LLM tasks get their instructions from `src/lezio/agent/prompts/`. Start from `docs/HANDOFF.md` (what
+lezio is, decisions and constraints); how lezio came out of slide-reader: `docs/history.md`.
 
 ## What the program does
 
