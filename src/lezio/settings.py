@@ -57,7 +57,7 @@ def settings_to_save(settings):
 
 def tts_options(overrides=None):
     """The configured TTS engine and its complete options: {"engine": ..., option: value, ...}.
-    overrides (e.g. from ./lezio tts --try) may change the engine and any option."""
+    overrides (e.g. from ./lezio voices --try) may change the engine and any option."""
     overrides = overrides or {}
     return engines.resolve(CONFIG["tts"], None, overrides)
 

@@ -196,6 +196,9 @@ def video_menu(doc):
     while True:
         key = select("Video", [Choice(f"theme        {v.get('theme', 'light')}", "theme",
                                       description="the house visual style (themes/*.toml)"),
+                               Choice(f"subtitles    {v.get('subtitles', 'track')}", "subtitles",
+                                      description="from the narration: a track players turn on/off, drawn into "
+                                                  "the picture, or none"),
                                Choice(f"resolution   {v.get('width')}x{v.get('height')}", "resolution"),
                                Choice(f"fps          {v.get('fps')}", "fps"), Choice("Back", BACK)])
         if key == BACK:
@@ -210,6 +213,11 @@ def video_menu(doc):
                     break
                 from .commands import preview_theme
                 subprocess.run(["open", str(preview_theme(name))])
+        elif key == "subtitles":
+            v["subtitles"] = select("Subtitles", [
+                Choice("track    a subtitle track players turn on and off, plus a .srt file", "track"),
+                Choice("burned   always visible, drawn into the picture", "burned"),
+                Choice("off      no subtitles", "off")], default=v.get("subtitles", "track"))
         elif key == "resolution":
             w, h = select("Resolution", [Choice(f"{w}x{h}", (w, h)) for w, h in RESOLUTIONS],
                           default=(v.get("width"), v.get("height")) if (v.get("width"), v.get("height")) in RESOLUTIONS else None)
@@ -244,8 +252,8 @@ def configure():
             Choice(f"Narration     {d.get('narration', {}).get('language')}", "narration"),
             Choice(f"Agent         {agent.get('backend')} · {agent.get('model')} · effort {agent.get('effort')}",
                    "agent"),
-            Choice(f"Video         theme {video.get('theme', 'light')} · {video.get('width')}x{video.get('height')} · "
-                   f"{video.get('fps')} fps", "video"),
+            Choice(f"Video         theme {video.get('theme', 'light')} · subtitles {video.get('subtitles', 'track')} · "
+                   f"{video.get('width')}x{video.get('height')} · {video.get('fps')} fps", "video"),
             Choice("Tuning", "tuning"),
             Separator(),
             Choice("Save and exit", "save"),

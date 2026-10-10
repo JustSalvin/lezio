@@ -1,15 +1,14 @@
-"""Commands other than the main one: status, check, build, tts, config, and the low-level tools."""
+"""The commands other than make and redo (run.py): status, build, config, voices, themes, templates, tools.
+All output goes through ui.py, so every command looks the same."""
 import json
 import subprocess
 import time
 from argparse import Namespace
 
-from rich.table import Table
-
 from .. import material as mat
 from ..config import CONFIG, ROOT
-from ..lesson import Lesson, slugify
-from ..script import is_written, load_script, pieces
+from ..lesson import Lesson, all_lessons, slugify
+from ..script import is_written, load_script, narration, pieces
 from ..settings import DEPTHS, house_theme, lesson_theme, tts_label, tts_options
 from ..validate import check_script
 from ..video import render
@@ -19,7 +18,10 @@ from . import ui
 from .run import Run, build_join, build_video, build_voice, rel
 
 
+# ------------------------------------------------------------------ status
 def status(a):
+    if not a.lesson:
+        return lessons_list()
     lesson = Lesson(a.lesson)
     script = load_script(lesson.script)
     s = script["settings"]
@@ -36,11 +38,7 @@ def status(a):
         ("instructions", ui.escape(s["instructions"]) or "[muted]none[/]"),
         ("video", rel(lesson.output) if lesson.output.exists() else "[muted]not assembled yet[/]"),
     ], title="status")
-    table = Table(box=None, padding=(0, 1))
-    for col, width in (("segment", 7), ("title", None), ("pieces", 6), ("voice", 6), ("video", 11)):
-        table.add_column(col, style="muted" if col in ("segment", "pieces") else None, no_wrap=True,
-                         overflow="ellipsis", min_width=width, max_width=30 if width is None else None,
-                         justify="right" if col in ("pieces", "voice") else "left")
+    rows = []
     for seg in script["segments"]:
         keys = pieces(seg)
         ok = sum(1 for k, t, _ in keys if meta.get(k, {}).get("text") == t and meta[k].get("tts") == opts
@@ -55,26 +53,32 @@ def status(a):
                 state = "[warn]outdated[/]"
             else:
                 state = "[ok]up to date[/]"
-        table.add_row(seg["id"], ui.escape(seg["title"][:60]), str(len(keys) or ""),
-                      voice_state, state)
-    ui.console.print(table)
+        title = seg["title"] if len(seg["title"]) <= 44 else seg["title"][:43] + "…"
+        rows.append([f"[muted]{seg['id']}[/]", ui.escape(title), str(len(keys) or ""), voice_state, state])
+    ui.table(["segment", "title", ">pieces", ">voice", "video"], rows)
+    if any(not is_written(lesson, x) for x in script["segments"]) or not lesson.output.exists():
+        ui.hint(f"continue: ./lezio make {lesson.id}")
 
 
-def check(a):
-    lesson = Lesson(a.lesson)
-    script = load_script(lesson.script)
-    errors, warnings = check_script(lesson, script)
-    all_pieces = [p for seg in script["segments"] for p in pieces(seg)]
-    words = sum(len(t.split()) for _, t, _ in all_pieces)
-    ui.console.print(f"{len(script['segments'])} segments · {len(all_pieces)} spoken pieces · {words} words "
-                     f"[muted](about {words / 150:.0f} min)[/]")
-    for w in warnings:
-        ui.console.print(f"  [warn]warning[/] {ui.escape(w)}")
-    for e in errors:
-        ui.console.print(f"  [err]error[/]   {ui.escape(e)}")
-    if errors:
-        raise SystemExit(1)
-    ui.console.print("[ok]✓ lesson OK[/]" + (" [muted](with warnings)[/]" if warnings else ""))
+def lessons_list():
+    ids = all_lessons()
+    if not ids:
+        ui.info("No lessons yet.")
+        ui.hint("start one: ./lezio make   (or ./lezio make input/<files>)")
+        return
+    rows = []
+    for lid in ids:
+        lesson = Lesson(lid)
+        script = load_script(lesson.script)
+        segs = script["segments"]
+        written = sum(1 for x in segs if is_written(lesson, x))
+        video = "[ok]✓[/]" if lesson.output.exists() else "[muted]—[/]"
+        title = script["title"] if len(script["title"]) <= 34 else script["title"][:33] + "…"
+        rows.append([f"[accent]{lid}[/]", ui.escape(title) or "[muted]not planned[/]",
+                     f"{written}/{len(segs)}" if segs else "[muted]—[/]", str(script["settings"]["depth"]), video])
+    ui.table(["lesson", "title", ">written", ">depth", "video"], rows)
+    ui.info("videos in output/<lesson>.mp4")
+    ui.hint("details: ./lezio status <lesson>     continue: ./lezio make <lesson>")
 
 
 def build(a):
@@ -82,40 +86,61 @@ def build(a):
     script = load_script(lesson.script)
     errors = check_script(lesson, script)[0]
     if errors:
-        ui.fail("the lesson has errors: " + ui.escape("; ".join(errors[:3])), f"./lezio check {lesson.id}")
+        ui.fail("the lesson has errors: " + ui.escape("; ".join(errors[:3])), f"./lezio tools check {lesson.id}")
     build_voice(lesson)
     build_video(lesson)
     Run(Namespace(yes=True, note="")).final_panel(build_join(lesson))
 
 
-def tts(a):
+# ------------------------------------------------------------------ configuration
+def config(a):
+    if getattr(a, "show", None) == "show":
+        return config_show()
+    from .configure import configure
+    configure()
+
+
+def config_show():
+    from ..agent.backends import task_options
+    v, n, ag = CONFIG["video"], CONFIG["narration"], CONFIG["agent"]
+    overrides = ", ".join(f"{t} {o['model']}/{o['effort']}" for t in ("plan", "write", "review")
+                          for o in [task_options(t)] if t in ag)
+    ui.key_values([
+        ("voice", ui.escape(tts_label())),
+        ("narration", f"{n['language']} · {n['piece_gap']} s between pieces"),
+        ("agent", f"{ag['backend']} · {ag['model']} · effort {ag['effort']}"
+                  + (f"  [muted]({ui.escape(overrides)})[/]" if overrides else "")),
+        ("video", f"theme {house_theme()} · subtitles {v.get('subtitles', 'track')} · {v['width']}x{v['height']} · "
+                  f"{v['fps']} fps"),
+        ("tuning", " · ".join(f"{k} {val}" for k, val in CONFIG["tuning"].items())),
+    ], title="config.toml")
+    ui.hint("change it: ./lezio config   (or edit config.toml)")
+
+
+def voices(a):
     current = tts_options()
     name = a.engine or current["engine"]
     engine = engines.get_engine(name)
     overrides = {"engine": name, **_kv(a.set), **({"voice": a.voice} if a.voice else {})}
     if a.try_text is None:
-        table = Table(box=None, padding=(0, 2), show_header=False)
-        for e in engines.ENGINES.values():
-            mark = "[ok]●[/]" if e.name == current["engine"] else " "
-            table.add_row(mark, f"[bold]{e.name}[/]", f"[muted]{e.runs}[/]", e.description)
-        ui.console.print(table)
+        ui.table(["", "engine", "runs", ""], [["[ok]●[/]" if e.name == current["engine"] else "", f"[accent]{e.name}[/]",
+                                              e.runs, ui.escape(e.description)] for e in engines.ENGINES.values()])
         opts = tts_options({"engine": name})
         rows = []
         for key, o in engine.options.items():
             allowed = (", ".join(map(str, o.choices)) if o.choices else
                        f"{o.minimum} … {o.maximum}" if o.minimum is not None else "free")
-            rows.append((key, f"[bold]{ui.escape(str(opts[key]))}[/]\n[muted]{ui.escape(o.help)}\n"
-                              f"allowed: {ui.escape(allowed)}[/]"))
+            rows.append([f"[accent]{key}[/]", f"[bold]{ui.escape(str(opts[key]))}[/]",
+                         f"[muted]{ui.escape(o.help)} · allowed: {ui.escape(allowed)}[/]"])
+        ui.table(["", "value", ""], rows, title=f"{name}: options in config.toml")
         if getattr(engine, "suggested_voices", None):
-            rows.append(("voices", ", ".join(engine.suggested_voices)))
-        ui.console.print()
-        ui.key_values(rows, title=ui.escape(f"{name} · values from config.toml [tts.{name}]"))
-        ui.info(f'try:     ./lezio tts --try "Ciao a tutti, iniziamo." --engine {name} --voice X --set key=value --play')
-        ui.info("change:  ./lezio config   (or edit config.toml)")
+            ui.info("voices: " + ", ".join(engine.suggested_voices))
+        ui.hint(f'listen:  ./lezio voices --try "Ciao a tutti, iniziamo." --engine {name} --voice NAME --play')
+        ui.hint("change:  ./lezio config")
         return
     problems = engine.validate({k: v for k, v in tts_options(overrides).items() if k != "engine"})
     if problems:
-        ui.fail("; ".join(problems))
+        ui.fail("; ".join(problems), "./lezio voices")
     label = "_".join(str(v) for k, v in overrides.items() if k in ("engine", "voice"))
     out = ROOT / "voice-samples" / f"try_{slugify(label)}_{time.strftime('%H%M%S')}.wav"
     with ui.step("Generating a sample") as st:
@@ -141,14 +166,16 @@ def themes(a):
         subprocess.run(["open", str(preview_theme(a.preview))])
         return
     import tomllib
-    table = Table(box=None, padding=(0, 2), show_header=False)
+    rows = []
     for path in sorted(THEMES.glob("*.toml")):
         data = tomllib.loads(path.read_text())
-        mark = "[ok]●[/]" if path.stem == house_theme() else " "
-        table.add_row(mark, f"[bold]{path.stem}[/]", ui.escape(data.get("description", "")))
-    ui.console.print(table)
-    ui.info(ui.escape(f"house theme: {house_theme()} (config.toml [video] theme, or ./lezio config)"))
-    ui.info("preview: ./lezio themes --preview NAME     your own: copy themes/light.toml to themes/NAME.toml")
+        rows.append(["[ok]●[/]" if path.stem == house_theme() else "", f"[accent]{path.stem}[/]",
+                     ui.escape(data.get("description", ""))])
+    ui.table(["", "theme", ""], rows)
+    ui.info(ui.escape(f"● the house theme (config.toml [video] theme); a lesson can ask for another in its "
+                      "instructions"))
+    ui.hint("preview:  ./lezio themes --preview NAME")
+    ui.hint("change:   ./lezio config      your own: copy themes/light.toml to themes/NAME.toml")
 
 
 def preview_theme(name):
@@ -172,11 +199,6 @@ def preview_theme(name):
     return out
 
 
-def config(a):
-    from .configure import configure
-    configure()
-
-
 def _kv(items):
     out = {}
     for item in items or []:
@@ -191,6 +213,28 @@ def _kv(items):
 
 
 # ------------------------------------------------------------------ low-level tools
+def tools(a):
+    {"check": tool_check, "ingest": tool_ingest, "audio": tool_audio, "render": tool_render, "join": tool_join,
+     "scene-api": tool_scene_api}[a.tool](a)
+
+
+def tool_check(a):
+    lesson = Lesson(a.lesson)
+    script = load_script(lesson.script)
+    errors, warnings = check_script(lesson, script)
+    all_pieces = [p for seg in script["segments"] for p in pieces(seg)]
+    words = sum(len(t.split()) for _, t, _ in all_pieces)
+    ui.info(f"{len(script['segments'])} segments · {len(all_pieces)} spoken pieces · {words} words "
+            f"(about {words / 150:.0f} min)")
+    for w in warnings:
+        ui.warn(ui.escape(w))
+    for e in errors:
+        ui.console.print(f"[err]✗[/] {ui.escape(e)}")
+    if errors:
+        raise SystemExit(1)
+    ui.done("lesson OK" + (" [muted](with warnings)[/]" if warnings else ""))
+
+
 def tool_ingest(a):
     lesson = Lesson(a.lesson)
     with ui.step("Reading the material") as st:
@@ -212,8 +256,9 @@ def tool_render(a):
         with ui.step("Preview render", total=len(ids)) as st:
             for sid in ids:
                 seg = next(s for s in script["segments"] if s["id"] == sid)
+                code = None if seg.get("blocks") else lesson.scene_file(sid).read_text()
                 try:
-                    sheet, report = render.preview(lesson, seg, lesson.scene_file(sid).read_text())
+                    sheet, report = render.preview(lesson, seg, code)
                 except render.RenderError as e:
                     ui.fail(f"{sid}: {ui.escape(str(e))}")
                 for w in report.get("warnings", []):
@@ -301,19 +346,18 @@ def templates(a):
     from ..scene import templates as tpls
     tpls.load_library()
     for f, err in tpls.LOAD_ERRORS:
-        ui.console.print(f"[err]cannot load {ui.escape(f)}[/]: {ui.escape(err)}")
+        ui.console.print(f"[err]✗[/] cannot load {ui.escape(f)}: {ui.escape(err)}")
     if not a.demo:
-        table = Table(box=None, padding=(0, 1), show_header=False)
         for cat, label in tpls.CATEGORIES.items():
             group = [t for t in tpls.REGISTRY.values() if t.category == cat]
             if group:
-                table.add_row(f"[bold]{label}[/]", "", "")
-                for t in group:
-                    src = "" if t.source == "built-in" else f" [muted]({t.source})[/]"
-                    table.add_row("", f"[accent]{t.name}[/]{src}", ui.escape(t.use_for))
-        ui.console.print(table)
-        ui.info(f"{len(tpls.REGISTRY)} templates · try one: ./lezio templates --demo NAME [--open] · all: --demo all")
-        ui.info("your own: a file in templates/ (see AGENTS.md, \"Template\")")
+                ui.section(label)
+                ui.table(["", ""], [[f"[accent]{t.name}[/]" + ("" if t.source == "built-in" else f" [muted]({t.source})[/]"),
+                                     ui.escape(t.use_for)] for t in group])
+        ui.console.print()
+        ui.info(f"{len(tpls.REGISTRY)} templates. The agent can also write its own for a lesson.")
+        ui.hint("see one:   ./lezio templates --demo NAME --open      test all: ./lezio templates --demo all")
+        ui.hint("your own:  a file in templates/ (see AGENTS.md, \"Template\")")
         return
     lesson = demo_lesson()
     names = list(tpls.REGISTRY) if a.demo == "all" else [n.strip() for n in a.demo.split(",")]
@@ -328,12 +372,12 @@ def templates(a):
                 st.advance()
         bad = [n for n, (_, _, p) in results.items() if p]
         st.done(f"{len(names) - len(bad)} ok" + (f" · [err]{len(bad)} failed[/]" if bad else ""))
+    rows = []
     for name, (sheet, report, problems) in results.items():
         mark = "[err]✗[/]" if problems else ("[warn]![/]" if report.get("warnings") else "[ok]✓[/]")
-        where = rel(sheet) if sheet else ""
-        ui.console.print(f" {mark} [bold]{name}[/]  [muted]{where}[/]")
-        for p in problems + report.get("warnings", []):
-            ui.console.print(f"     [muted]{ui.escape(str(p))}[/]")
+        notes = "; ".join(ui.escape(str(p)) for p in problems + report.get("warnings", [])[:2])
+        rows.append([mark, f"[accent]{name}[/]", f"[muted]{rel(sheet)}[/]" if sheet else "", notes])
+    ui.table(["", "template", "step sheet", ""], rows)
     if getattr(a, "open", False):
         for sheet, _, _ in results.values():
             if sheet:

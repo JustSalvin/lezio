@@ -6,7 +6,7 @@ LLM tasks get their instructions from `src/lezio/agent/prompts/`. How lezio came
 
 ## What the program does
 
-`./lezio` turns study material (PDF, Markdown/text, DOCX, pictures; one or more files) into a narrated
+`./lezio make` turns study material (PDF, Markdown/text, DOCX, pictures; one or more files) into a narrated
 video lesson. The program owns the whole process; an LLM is called only for narrow tasks, and only
 through tools the program defines.
 
@@ -21,7 +21,7 @@ through tools the program defines.
                                                                         └─ lezio.scene (templates, helpers)
 ```
 
-Flow of `./lezio <files|lesson>`: resolve the per-video choices (wizard/options, saved choices) → summary
+Flow of `./lezio make <files|lesson>`: resolve the per-video choices (wizard/options, saved choices) → summary
 → ingest new/changed sources → plan task (when there is no plan for the current sources/focus/depth)
 → write tasks (`tuning.segments_per_task` segments each; a segment is a list of template blocks, every
 submission is checked and previewed) →
@@ -46,7 +46,9 @@ src/lezio/
   validate.py              narration rules, scene code checks (AST allowlist), whole-script check
   material/                ingestion: pdf.py (pages, L-numbered text lines, figures, chrome removal),
                            text.py (.md/.txt sections), docx.py, image.py; __init__.py: index, refs, Material
-  app/                     cli.py, run.py (the workflow), commands.py, ui.py (rich), wizard.py (questionary),
+  app/                     cli.py (COMMANDS: every command described once; help pages and parsers come from
+                           it), run.py (make/redo: the workflow), commands.py (the other commands), ui.py
+                           (rich: the only place output styles are defined), wizard.py (questionary),
                            configure.py (./lezio config, tomlkit)
   agent/
     tasks.py               the three tasks, their tools, the scene API reference given to the model
@@ -62,6 +64,7 @@ src/lezio/
     scene_runner.py        Manim scene: one segment → runs scenes/<id>.py:build(scene, steps, material)
     manim_entry.py         file given to the manim CLI
     render.py              previews, final renders, step sheets, fingerprints, final join
+    subtitles.py           subtitles from the narration timings: .srt, track in the MP4, or burned in
     theme_preview.py       still image of a theme (./lezio themes --preview)
     scene_runner.py        runs a segment: its template blocks (or, for older segments, scenes/<id>.py)
   scene/templates/         the template library: __init__.py (framework: @template, Ctx, run_blocks,
@@ -122,8 +125,12 @@ input/  output/            material in, videos out (both gitignored)
   it produces goes through a tool that validates it. Prompt texts belong in `agent/prompts/`, not in code.
 - Scene code is untrusted: `validate.check_scene_code` (imports allowlist, forbidden names/attributes)
   runs before every render, renders have a timeout, the runner's cwd is the render's media directory.
-- Console output goes through `app/ui.py` (escape user text with `ui.escape`); detailed output of
-  subprocesses goes to `lessons/<id>/build/logs/`.
+- Console output goes through `app/ui.py` (escape user text with `ui.escape`): `banner`, `section`,
+  `table` for lists, `key_values` for summaries, `step` for work in progress, `done`/`warn`/`fail`, and
+  `hint` for what to do next. Detailed output of subprocesses goes to `lessons/<id>/build/logs/`.
+- Commands: one verb each (`make`, `redo`, `status`, `build`, `config`, `voices`, `themes`, `templates`,
+  `tools`, `help`); add one to `cli.COMMANDS`. Configuration changes only through `config` (or the file):
+  the other commands show and preview.
 - A segment video is re-rendered when its fingerprint changes (segment entry, audio durations, scene file,
   `lezio.scene` + runner code, material, video settings): `video/render.fingerprint`. Audio is regenerated
   when text or TTS options change.
@@ -185,12 +192,12 @@ order of tasks and retries in `app/run.py`.
 
 ```bash
 .venv/bin/python -m py_compile $(find src -name "*.py")
-./lezio check <lesson>                             # narration, scene code, refs
-./lezio render <lesson> --segments s01 --preview   # step sheet in build/qa (estimated timing if no voice)
-./lezio templates --demo all                       # every template renders its example (build/qa)
-./lezio scene-api                                  # the API the model sees for its own templates
-./lezio tts --try "Prova" --engine edge            # TTS engines
-./lezio build <lesson>                             # voice/render/join without LLM calls
+./lezio tools check <lesson>                             # blocks, narration, templates, refs
+./lezio tools render <lesson> --segments s01 --preview   # step sheet in build/qa (estimated timing if no voice)
+./lezio templates --demo all                             # every template renders its example (build/qa)
+./lezio tools scene-api                                  # the API the model sees for its own templates
+./lezio voices --try "Prova" --engine edge               # TTS engines
+./lezio build <lesson>                                   # voice/render/join without LLM calls
 ```
 
 LLM tasks use the user's Claude subscription: test them on small material first (e.g. a few PDF pages

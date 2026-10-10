@@ -13,10 +13,13 @@ import tomllib
 from manim import (BOLD, DOWN, NORMAL, UL, Arrow, Circle, DoubleArrow, Line, MarkupText, RoundedRectangle, Text,
                    VGroup, VMobject)
 
+from ..config import CONFIG
 from ..config import THEMES as THEMES_DIR
 from ..settings import house_theme
 FRAME_WIDTH, FRAME_HEIGHT = 14.222, 8.0
 SAFE_LEFT, SAFE_RIGHT, SAFE_BOTTOM, SAFE_TOP = -6.6, 6.6, -3.6, 3.4
+if str(CONFIG.get("video", {}).get("subtitles", "")).lower() == "burned":
+    SAFE_BOTTOM = -2.8                # leave the bottom band to the subtitles drawn into the picture
 
 COLOR_NAMES = {           # theme key -> name in scene code
     "background": "BACKGROUND", "text": "TEXT", "muted": "MUTED",

@@ -1,6 +1,6 @@
 """Validation of what the agent (or a person) writes: narration pieces, scene code, the whole script.
 
-Used by the agent tools (submissions are checked on the spot), by `./lezio check` and by the scene runner
+Used by the agent tools (submissions are checked on the spot), by `./lezio tools check` and by the scene runner
 (scene code is checked again before it runs).
 """
 import ast

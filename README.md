@@ -13,7 +13,7 @@ works only through tools defined by the program (read the material, look at page
 segment — checked and previewed on the spot —, ...): it has no files, shell or web.
 
 ```
-./lezio input/slides.pdf input/appunti.md
+./lezio make input/slides.pdf input/appunti.md
   ✓ Reading the material          2 sources · 31 pages/sections in scope
   ✓ Planning the lesson           9 segments · about 14 min                  agent
   ✓ Writing the lesson            9 segments · 84 narration pieces           agent
@@ -43,12 +43,13 @@ for the program and video, `.venv-tts` for speech) and downloads the speech mode
 ## Usage
 
 ```bash
-./lezio                                        # wizard: arrow-key menus for files or lesson and options
-./lezio input/slides.pdf                       # asks only what is missing
-./lezio input/slides.pdf input/appunti.md input/schema.png   # several files, of any kind
-./lezio input/slides.pdf --focus "slides.pdf:21-40" --depth 2 --yes   # no questions
-./lezio input/slides.pdf --instructions "Mostra le slide originali ed evidenzia la riga di cui parli"
-./lezio my-lesson                              # continue / update an existing lesson
+./lezio                                        # the commands, at a glance
+./lezio make                                   # wizard: arrow-key menus for files or lesson and options
+./lezio make input/slides.pdf                  # asks only what is missing
+./lezio make input/slides.pdf input/appunti.md input/schema.png   # several files, of any kind
+./lezio make input/slides.pdf --focus "slides.pdf:21-40" --depth 2 --yes   # no questions
+./lezio make input/slides.pdf --instructions "Mostra le slide originali ed evidenzia la riga di cui parli"
+./lezio make my-lesson                         # continue / update an existing lesson
 ```
 
 **Study material**: PDF (slides or documents), Markdown and plain text, Word (`.docx`), pictures (`.png`,
@@ -57,7 +58,7 @@ there.
 
 Before starting, a summary shows material, depth, theme, voice, agent model, instructions and the state of the
 lesson; after planning, the list of segments is shown for confirmation. Each step runs with a live
-progress line. Choices are saved in the lesson, so `./lezio <lesson>` later writes only what is missing and
+progress line. Choices are saved in the lesson, so `./lezio make <lesson>` later writes only what is missing and
 rebuilds only what changed; it is resumable if interrupted.
 
 On an existing lesson the wizard offers: update the video, change the study material (add/remove files,
@@ -79,16 +80,18 @@ change the instructions, rewrite from scratch.
 ### Other commands
 
 ```bash
+./lezio status                                            # your lessons
 ./lezio status <lesson>                                   # segments: written, voice, video up to date?
-./lezio redo <lesson> --segments s03 --note "add an example"   # the agent rewrites segment s03
-./lezio redo <lesson> --segments s03,s05 --part voice     # new voice takes   (--part video: re-render)
+./lezio redo <lesson> s03 --note "add an example"         # the agent rewrites segment s03
+./lezio redo <lesson> s03,s05 --part voice                # new voice takes   (--part video: re-render)
 ./lezio build <lesson>                                    # after editing the lesson by hand
-./lezio config                                            # change the configuration with menus
+./lezio config                                            # change the configuration with menus (show: print it)
+./lezio voices                                            # speech engines, options and voices
+./lezio voices --try "Ciao a tutti." --voice it_male --play
 ./lezio themes                                            # visual themes;  --preview NAME to see one
 ./lezio templates                                         # scene templates;  --demo NAME --open to see one
-./lezio tts                                               # TTS engines, options and voices
-./lezio tts --try "Ciao a tutti." --voice it_male --play
-./lezio help tools                                        # low-level commands
+./lezio tools                                             # low-level commands (check, ingest, audio, render, join)
+./lezio help <command>                                    # the options of a command
 ```
 
 ## How a lesson looks
@@ -119,9 +122,21 @@ A lesson can ask for a different theme in its instructions (e.g. "use the chalkb
 | 3 — condensed | the main points, lightly summarized |
 | 4 — short | very concise, short-video style |
 
+## Subtitles
+
+Subtitles come from the narration, timed with the voice (`config.toml [video] subtitles`, or
+`./lezio config` → Video):
+
+| Value | Result |
+|---|---|
+| `track` (default) | a subtitle track inside the MP4 that the player turns on and off (QuickTime: View → Subtitles; VLC: Subtitle menu; IINA, Windows players...), plus `output/<lesson>.srt` beside the video (YouTube, editors, players that load .srt files) |
+| `burned` | always visible, drawn into the picture (for sites that ignore subtitle tracks); scenes keep the bottom band free |
+| `off` | no subtitles |
+
 ## Configuration — `config.toml`
 
-Only stable configuration; per-video choices are never here. Edit it by hand or with `./lezio config`
+Only stable configuration; per-video choices are never here. It is the only place where configuration
+lives: change it by hand or with `./lezio config` (`voices`, `themes` and `templates` only show and preview)
 (arrow-key menus, with a "try this voice" option; comments in the file are kept).
 
 | Section | What |
@@ -129,7 +144,7 @@ Only stable configuration; per-video choices are never here. Edit it by hand or 
 | `[tts]`, `[tts.<engine>]` | speech engine (`voxtral` local, `edge` online) and its options: voice, expressiveness, model |
 | `[narration]` | language of narration and on-screen texts, pause between pieces |
 | `[agent]` | LLM backend, **model** (`sonnet` by default, `opus`, `haiku` or a full id) and **effort**; optional `[agent.plan]`, `[agent.write]`, `[agent.review]` overrides |
-| `[video]` | house **theme** (a file in `themes/`), resolution and frame rate |
+| `[video]` | house **theme** (a file in `themes/`), **subtitles**, resolution and frame rate |
 | `[tuning]` | segments per agent task, previews per segment, render timeout, parallel renders, image sizes |
 
 The summary shows the configured model; the final panel shows the model that actually answered.

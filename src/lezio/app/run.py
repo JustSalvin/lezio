@@ -19,8 +19,6 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from rich.table import Table
-
 from .. import material as mat
 from ..agent import tasks
 from ..agent.backends import get_backend, task_options
@@ -79,13 +77,13 @@ class Run:
             for t in targets:
                 p = Path(t).expanduser()
                 if not p.exists():
-                    ui.fail(f"'{t}' is neither a file nor an existing lesson", "see ./lezio --help")
+                    ui.fail(f"'{t}' is neither a file nor an existing lesson", "./lezio help make")
                 if not mat.supported(p):
                     ui.fail(f"unsupported file type: {p.name}", "supported: " + ", ".join(sorted(mat.KINDS)))
                 paths.append(p.resolve())
             return paths, a.id or slugify(paths[0].stem)
         if not self.interactive:
-            ui.fail("tell me which files or lesson", "./lezio <files... | lesson>   (see ./lezio --help)")
+            ui.fail("tell me which files or lesson", "./lezio make <files... | lesson>   (./lezio help make)")
         lessons = []
         for lid in all_lessons():
             s = load_script(Lesson(lid).script)
@@ -354,20 +352,15 @@ class Run:
                     + (f" · {skipped} parts skipped" if skipped else ""))
         self.show_plan()
         if self.interactive and not wizard.confirm("Continue with this plan?"):
-            ui.info(f"Stopped. You can edit {rel(self.lesson.script)} and run ./lezio {self.lesson.id} again.")
+            ui.info(f"Stopped. You can edit {rel(self.lesson.script)} and run ./lezio make {self.lesson.id} again.")
             raise SystemExit(0)
 
     def show_plan(self):
-        table = Table(box=None, padding=(0, 1), show_header=False)
-        table.add_column(style="muted")
-        table.add_column()
-        table.add_column(style="muted", justify="right")
-        for x in self.script["segments"]:
-            done = " [muted](written)[/]" if is_written(self.lesson, x) else ""
-            table.add_row(x["id"], ui.escape(x["title"]) + done, f"{x['minutes']:g} min")
         theme = f"  [muted]theme {self.script['theme']}[/]" if self.script.get("theme") else ""
-        ui.console.print(f"\n   [bold]{ui.escape(self.script['title'])}[/]{theme}")
-        ui.console.print(table)
+        ui.console.print(f"\n[bold]{ui.escape(self.script['title'])}[/]{theme}")
+        ui.table(["", "", ""], [[f"[muted]{x['id']}[/]", ui.escape(x["title"]) + (" [muted](written)[/]" if
+                                 is_written(self.lesson, x) else ""), f"[muted]{x['minutes']:g} min[/]"]
+                                for x in self.script["segments"]])
         for x in self.script["skipped"]:
             ui.console.print(f"   [muted]skipped {ui.escape(x['ref'])}: {ui.escape(x.get('reason', ''))}[/]")
         ui.console.print()
@@ -413,7 +406,7 @@ class Run:
         script = load_script(self.lesson.script)
         errors = check_script(self.lesson, script)[0]
         if errors:
-            ui.fail("the lesson has errors: " + "; ".join(errors[:3]), f"./lezio check {self.lesson.id}")
+            ui.fail("the lesson has errors: " + "; ".join(errors[:3]), f"./lezio tools check {self.lesson.id}")
         build_voice(self.lesson)
         rendered = build_video(self.lesson)
         if rendered and review and not getattr(self.a, "no_review", False):
@@ -478,7 +471,7 @@ def build_video(lesson, title="Rendering the video", quiet=False, only=None):
             and (only is None or s["id"] in only)]
     missing = render.missing_audio(lesson, [s for s in script["segments"] if s["id"] in todo])
     if missing:
-        ui.fail(f"{len(missing)} narration pieces have no voice (e.g. {missing[0]})", f"./lezio audio {lesson.id}")
+        ui.fail(f"{len(missing)} narration pieces have no voice (e.g. {missing[0]})", f"./lezio tools audio {lesson.id}")
     if not todo:
         if not quiet:
             ui.console.print(f"[ok]✓[/] [bold]{title}[/]  up to date")
@@ -505,6 +498,8 @@ def build_join(lesson):
 
 # ==================================================================== entry points
 def make(a):
+    if not a.targets and wizard.interactive() and not a.yes:
+        ui.banner()
     run = Run(a)
     run.resolve()
     run.summary()
@@ -514,7 +509,7 @@ def make(a):
 
 
 def redo(a):
-    """./lezio redo <lesson> --segments s03,s05 [--part script|voice|video] [--note "..."]"""
+    """./lezio redo <lesson> s03,s05 [--part script|voice|video] [--note "..."]"""
     yes = a.yes
     a.targets, a.yes = [a.lesson], True
     run = Run(a)

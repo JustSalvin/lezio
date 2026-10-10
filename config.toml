@@ -47,6 +47,10 @@ effort = "high"
 # House visual style: a theme file in themes/ (light, dark, chalkboard, whiteboard, paper, or your own).
 # Preview: ./lezio themes --preview <name>. A lesson can ask for another one in its instructions.
 theme = "light"
+# Subtitles from the narration:
+#   "track"  = a track inside the MP4 that players turn on and off, plus output/<lesson>.srt
+#   "burned" = always visible, drawn into the picture      "off" = none
+subtitles = "track"
 width = 1920
 height = 1080
 fps = 30

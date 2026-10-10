@@ -21,18 +21,54 @@ console = Console(theme=THEME, highlight=False)
 
 
 def banner():
-    console.print(Panel.fit("[bold]lezio[/]  [muted]study material → narrated video lesson[/]",
+    """The program's header (help, wizard)."""
+    console.print(Panel.fit("[bold accent]lezio[/]  [muted]study material → narrated video lesson[/]",
                             border_style="accent", padding=(0, 2)))
 
 
+def section(text):
+    """A heading inside a page of output (help groups, parts of a listing)."""
+    console.print(f"\n[bold]{text}[/]")
+
+
 def fail(message, hint=None):
+    """An error: red panel with the problem and, muted, what to do. Exits."""
     body = f"[err]{message}[/]" + (f"\n[muted]{hint}[/]" if hint else "")
     console.print(Panel(body, title="error", title_align="left", border_style="red", padding=(0, 1)))
     sys.exit(1)
 
 
 def info(message):
+    """A side note (muted)."""
     console.print(f"[muted]{message}[/]")
+
+
+def hint(message):
+    """What the user can do next: "→ message"."""
+    console.print(f"[muted]→ {message}[/]")
+
+
+def done(message):
+    """A one-line success."""
+    console.print(f"[ok]✓[/] {message}")
+
+
+def warn(message):
+    console.print(f"[warn]![/] {message}")
+
+
+def table(columns, rows, title=None):
+    """A list (lessons, voices, themes, templates, segments) in the same style everywhere.
+    columns: names (a name starting with ">" is right-aligned); rows: lists of rich-markup strings."""
+    t = Table(box=None, padding=(0, 2), header_style="key", show_header=any(columns),
+              title=f"[bold]{title}[/]" if title else None, title_justify="left")
+    for k, c in enumerate(columns):
+        right, last = c.startswith(">"), k == len(columns) - 1
+        t.add_column(c.lstrip(">"), justify="right" if right else "left", no_wrap=not last,
+                     overflow="fold" if last else "ellipsis")
+    for r in rows:
+        t.add_row(*r)
+    console.print(t)
 
 
 def fmt_seconds(s):

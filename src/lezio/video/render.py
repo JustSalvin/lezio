@@ -100,7 +100,7 @@ def fingerprint(lesson, script, segment):
     h = hashlib.sha1(json.dumps(segment, sort_keys=True, ensure_ascii=False).encode())
     v = CONFIG["video"]
     theme = THEMES / f"{lesson_theme(script)}.toml"
-    h.update(f"{s['piece_gap']}|{v['width']}x{v['height']}@{v['fps']}".encode())
+    h.update(f"{s['piece_gap']}|{v['width']}x{v['height']}@{v['fps']}|{v.get('subtitles') == 'burned'}".encode())
     h.update(theme.read_bytes() if theme.exists() else b"")
     meta = lesson.durations_meta()
     for key, _, _ in pieces(segment):
@@ -271,11 +271,26 @@ def join(lesson):
     missing = [f.name for f in files if not f.exists()]
     if missing:
         raise RenderError(f"missing segment videos: {missing}")
+    from . import subtitles
     lst = lesson.build / "concat.txt"
     lst.write_text("".join(f"file '{f}'\n" for f in files))
     OUTPUT.mkdir(exist_ok=True)
-    subprocess.run([str(FFMPEG), "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
+    srt = lesson.output.with_suffix(".srt")
+    mode = subtitles.mode()
+    inputs, extra, vf = ["-f", "concat", "-safe", "0", "-i", str(lst)], [], []
+    if mode == "off":
+        srt.unlink(missing_ok=True)
+    else:
+        subtitles.write_srt(subtitles.cues(lesson), srt)
+        if mode == "track":
+            inputs += ["-i", str(srt)]
+            extra = ["-map", "0:v", "-map", "0:a", "-map", "1:s", "-c:s", "mov_text",
+                     "-metadata:s:s:0", f"language={subtitles.language_code()}",
+                     "-metadata:s:s:0", f"title={CONFIG['narration']['language']}"]
+        else:
+            vf = ["-vf", subtitles.burn_filter(srt)]
+    subprocess.run([str(FFMPEG), "-y", "-loglevel", "error", *inputs, *vf,
                     "-c:v", "libx264", "-crf", "20", "-preset", "medium", "-pix_fmt", "yuv420p",
                     "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-c:a", "aac", "-b:a", "160k", "-ar", "48000",
-                    "-movflags", "+faststart", str(lesson.output)], check=True)
+                    *extra, "-movflags", "+faststart", str(lesson.output)], check=True)
     return lesson.output, video_duration(lesson.output), lesson.output.stat().st_size
