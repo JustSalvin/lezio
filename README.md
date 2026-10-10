@@ -92,7 +92,7 @@ change the instructions, rewrite from scratch.
 ./lezio voices                                            # speech engines, options and voices
 ./lezio voices --try "Ciao a tutti." --voice it_male --play
 ./lezio themes                                            # visual themes;  --preview NAME to see one
-./lezio templates                                         # scene templates;  --demo NAME --open to see one
+./lezio templates                                         # scene templates;  --demo NAME renders one
 ./lezio tools                                             # low-level commands (check, ingest, audio, render, join)
 ./lezio help <command>                                    # the options of a command
 ```
@@ -108,7 +108,7 @@ the instructions; they take priority over the guidelines.
 Scenes are built from **templates** filled with data (title cards, questions, bullets, definitions,
 flows, cycles, trees, timelines, comparisons, analogies, misconceptions, derivations, worked examples,
 tables, charts, function plots, arrays, code, original pages and figures, ...): `./lezio templates` lists
-them, `./lezio templates --demo NAME --open` shows one. When none fits, the agent writes its own template
+them, `./lezio templates --demo NAME` renders one (the frames go to lessons/_templates/build/qa/). When none fits, the agent writes its own template
 for the lesson. Your own templates go in `templates/` (see AGENTS.md): the agent sees them with the others.
 
 The **visual style** (colors, fonts, sizes) is the house **theme**, a file in `themes/`: `light`

@@ -3,7 +3,6 @@
 config.toml stays the only place of the configuration: this command edits it with tomlkit, so comments
 and layout of the file are kept. Nothing is written until "Save and exit".
 """
-import subprocess
 import time
 
 import questionary
@@ -118,8 +117,7 @@ def try_voice(name, values):
         except client.VoiceError as e:
             st.done(f"[err]{ui.escape(str(e))}[/]")
             return
-        st.done(str(out.relative_to(ROOT)))
-    subprocess.run(["afplay", str(out)])
+        st.done(f"{out.relative_to(ROOT)}  [muted](listen to it with any player)[/]")
 
 
 def narration_menu(doc):
@@ -208,11 +206,11 @@ def video_menu(doc):
             while True:
                 name = select("Theme (your own: copy themes/light.toml to themes/<name>.toml)",
                               [Choice(f"{n:12} {d}", n) for n, d in themes.items()], default=v.get("theme", "light"))
-                if select(f"Theme {name}", [Choice("Use it", "use"), Choice("See a preview first", "preview")]) == "use":
+                if select(f"Theme {name}", [Choice("Use it", "use"), Choice("Make a preview picture first", "preview")]) == "use":
                     v["theme"] = name
                     break
                 from .commands import preview_theme
-                subprocess.run(["open", str(preview_theme(name))])
+                preview_theme(name)                   # prints where the picture is
         elif key == "subtitles":
             v["subtitles"] = select("Subtitles", [
                 Choice("track    a subtitle track players turn on and off, plus a .srt file", "track"),

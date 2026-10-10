@@ -171,8 +171,8 @@ def my_template(ctx, steps, items: list[str], note: str | None = None):
 
 Rules: annotate the arguments (the program checks the agent's JSON against them); build first, animate
 inside phases; only theme names for colors/fonts/sizes; `text_box` for text that must wrap; the example
-narration in the lesson language without digits. Check it with `./lezio templates --demo my_template
---open`. The module is discovered automatically; no registration list to edit.
+narration in the lesson language without digits. Check it with `./lezio templates --demo my_template`
+(step sheet in lessons/_templates/build/qa/). The module is discovered automatically; no registration list to edit.
 
 **Scene helper** — a function in `lezio/scene/*.py` exported by `scene/__init__.py`, with a docstring
 written for the model, and listed in `agent.tasks.scene_api()`.

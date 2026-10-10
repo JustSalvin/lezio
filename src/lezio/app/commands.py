@@ -164,7 +164,7 @@ def voices(a):
 def themes(a):
     from ..config import THEMES
     if a.preview:
-        subprocess.run(["open", str(preview_theme(a.preview))])
+        preview_theme(a.preview)                      # prints where the picture is; nothing is opened
         return
     import tomllib
     rows = []
@@ -357,7 +357,7 @@ def templates(a):
                                      ui.escape(t.use_for)] for t in group])
         ui.console.print()
         ui.info(f"{len(tpls.REGISTRY)} templates. The agent can also write its own for a lesson.")
-        ui.hint("see one:   ./lezio templates --demo NAME --open      test all: ./lezio templates --demo all")
+        ui.hint("see one:   ./lezio templates --demo NAME      test all: ./lezio templates --demo all")
         ui.hint("your own:  a file in templates/ (see AGENTS.md, \"Template\")")
         return
     lesson = demo_lesson()
@@ -379,10 +379,6 @@ def templates(a):
         notes = "; ".join(ui.escape(str(p)) for p in problems + report.get("warnings", [])[:2])
         rows.append([mark, f"[accent]{name}[/]", f"[muted]{rel(sheet)}[/]" if sheet else "", notes])
     ui.table(["", "template", "step sheet", ""], rows)
-    if getattr(a, "open", False):
-        for sheet, _, _ in results.values():
-            if sheet:
-                subprocess.run(["open", str(sheet)])
     if any(p for _, _, p in results.values()):
         raise SystemExit(1)
 
