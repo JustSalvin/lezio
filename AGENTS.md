@@ -73,9 +73,10 @@ src/lezio/
   scene/                   PUBLIC helper library of scene code (`from lezio.scene import *`):
                            sync.py (Steps/Timer), style.py (theme colors/fonts/sizes, T, heading, box...),
                            material.py (material.page/figure, page.mark), templates/ (above)
-lessons/<id>/              lesson.json, script.json, templates/*.py (the agent's), build/ (cache, gitignored)
+lessons/<id>/              lesson.json, script.json, templates/*.py (the agent's), build/ (cache); all of lessons/ is
+                           gitignored: the user's lessons never go into the repository
 lessons/_templates/        internal lesson used to render template examples (./lezio templates --demo)
-archive/slide-reader/      old slide-reader lessons (not loaded)
+archive/slide-reader/      old slide-reader lessons (local only, gitignored, not loaded)
 input/  output/            material in, videos out (both gitignored)
 ```
 

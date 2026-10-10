@@ -22,8 +22,7 @@ need judgment — planning the lesson, writing the narration and scenes of a few
 final frames. In every task the model works only through tools the program defines (read the material,
 look at pages, submit a segment — checked and previewed on the spot —, ...): it has no files, shell or web.
 
-- Repository: `github.com/JustSalvin/lezio` (private). Local folder: `/Users/salvatore/Documents/Projects/slide-reader`
-  (the folder kept its old name). Command: `./lezio` (bash wrapper → `.venv/bin/python -m lezio`, package in `src/lezio/`).
+- Repository: `github.com/JustSalvin/lezio` (public). The local folder kept its old name, `slide-reader/`. Command: `./lezio` (bash wrapper → `.venv/bin/python -m lezio`, package in `src/lezio/`).
 - Machine: macOS on Apple Silicon (M5, 24 GB). Python 3.14 via mise. Homebrew cairo/pkgconf. Two venvs:
   `.venv` (program, Manim 0.22, PyMuPDF, python-docx, Claude Agent SDK, rich, questionary, tomlkit) and
   `.venv-tts` (MLX, mlx-audio with Voxtral, edge-tts). `setup.sh` installs everything.
@@ -151,10 +150,11 @@ themes/           theme presets (versioned; users add their own)
 templates/        the user's own templates (optional)
 input/            study material (gitignored); files given from elsewhere are copied here
 output/           finished videos + .srt (gitignored)
-lessons/<id>/     lesson.json (sources), script.json (choices, plan, segments/blocks), templates/ (agent's),
-                  build/ (cache: material, audio, video, qa step sheets, agent log, logs, joined.json)
+lessons/<id>/     the user's lessons (gitignored, like all of lessons/): lesson.json (sources), script.json
+                  (choices, plan, segments/blocks), templates/ (agent's), build/ (cache: material, audio,
+                  video, qa step sheets, agent log, logs, joined.json)
 lessons/_templates/   internal lesson for template demos and theme previews (gitignored)
-archive/slide-reader/ lessons of the previous program (not loaded)
+archive/slide-reader/ lessons of the previous program (local only, gitignored, not loaded)
 voice-samples/    voice tries (gitignored)
 docs/             HANDOFF.md, history.md, teaching-guidelines.md
 ```

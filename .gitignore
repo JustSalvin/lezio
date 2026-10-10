@@ -1,11 +1,10 @@
 .venv/
 .venv-tts/
-lessons/*/build/
-archive/*/*/build/
+/lessons/
+/archive/
 output/
 input/*
 __pycache__/
 .DS_Store
 voice-samples/
 /media/
-lessons/_templates/

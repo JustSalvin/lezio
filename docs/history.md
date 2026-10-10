@@ -15,8 +15,8 @@ the wizard and the rich terminal UI, the split between per-video choices and con
 detection with fingerprints, resumability, the depth levels, the writing rules for speech, PDF chrome
 detection and text-line highlighting, the house style and the animation templates (now optional layouts).
 
-The lessons made with slide-reader are kept in `archive/slide-reader/` (not loaded by lezio); their
-videos stay in `output/`.
+The lessons made with slide-reader are kept locally in `archive/slide-reader/` (gitignored, not loaded by
+lezio); their videos stay in `output/`.
 
 ## The rebuild (October 2026)
 

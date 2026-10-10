@@ -167,12 +167,11 @@ fixes a visual language for the whole lesson (the same concept always gets the s
 ```
 input/                     study material
 output/                    finished videos
-lessons/<lesson>/
+lessons/<lesson>/          your lessons (not versioned)
     lesson.json            the files the lesson is made from
     script.json            per-video choices, plan, segments and narration (editable by hand)
     scenes/                scene code of each segment (editable by hand)
     build/                 cache: material, audio, renders, step sheets, agent log (deletable)
-archive/slide-reader/      lessons of slide-reader, the previous version of the program (not used)
 themes/                    visual themes (house style presets; add your own)
 config.toml                configuration
 src/lezio/                 the program (see AGENTS.md)
